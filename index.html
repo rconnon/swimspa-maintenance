@@ -1,0 +1,2731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f9f9f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)">
+<title>Vita Spa XL4 Water Manager</title>
+<style>
+/* ============================================================
+   CSS VARIABLES — light mode is the default; dark overrides
+   via prefers-color-scheme. System fonts only, no CDN.
+   ============================================================ */
+:root {
+  color-scheme: light dark;
+  --bg: #f9f9f7;            /* page plane */
+  --surface: #fcfcfb;       /* cards / chart surface */
+  --ink: #0b0b0b;           /* primary text */
+  --ink-2: #52514e;         /* secondary text */
+  --muted: #898781;         /* axis / captions */
+  --hairline: #e1e0d9;      /* gridlines / dividers */
+  --border: rgba(11,11,11,0.10);
+  --accent: #2a78d6;        /* interactive / series-1 blue */
+  --accent-ink: #ffffff;
+  /* Status palette — fixed, never used as series colors */
+  --good: #0ca30c;
+  --warn: #fab219;
+  --serious: #ec835a;
+  --crit: #d03b3b;
+  --info: #2a78d6;
+  --gray-status: #898781;
+  /* Soft tint backgrounds for status banners */
+  --good-bg: rgba(12,163,12,0.10);
+  --warn-bg: rgba(250,178,25,0.14);
+  --crit-bg: rgba(208,59,59,0.10);
+  --gray-bg: rgba(137,135,129,0.12);
+  --info-bg: rgba(42,120,214,0.10);
+  /* Chart series (validated 4-slot categorical) */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --band: rgba(42,120,214,0.10); /* target-band wash */
+  --radius: 16px;
+  --tabbar-h: 62px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --hairline: #2c2c2a;
+    --border: rgba(255,255,255,0.10);
+    --accent: #3987e5;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --band: rgba(57,135,229,0.14);
+    --good-bg: rgba(12,163,12,0.16);
+    --warn-bg: rgba(250,178,25,0.14);
+    --crit-bg: rgba(208,59,59,0.18);
+    --gray-bg: rgba(137,135,129,0.16);
+    --info-bg: rgba(57,135,229,0.16);
+  }
+}
+
+/* ============ RESET / BASE ============ */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  line-height: 1.45;
+  padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
+}
+button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+input, select, textarea { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--hairline); border-radius: 10px; padding: 10px 12px; width: 100%; }
+h1, h2, h3 { line-height: 1.2; }
+svg { display: block; max-width: 100%; }
+
+/* ============ LAYOUT ============ */
+.screen { max-width: 640px; margin: 0 auto; padding: 16px 16px 24px; }
+.screen-title { font-size: 22px; font-weight: 700; margin: 6px 0 14px; }
+.subtitle { color: var(--ink-2); font-size: 14px; margin-top: -10px; margin-bottom: 14px; }
+
+/* ============ CARDS ============ */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 14px;
+}
+.card h3 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 8px; }
+.card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+@media (min-width: 560px) { .card-grid { grid-template-columns: repeat(4, 1fr); } }
+.card-grid .card { margin-bottom: 0; padding: 14px; }
+
+/* Chemistry stat tile */
+.stat-label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.stat-value { font-size: 26px; font-weight: 650; margin: 2px 0; }
+.stat-sub { font-size: 12px; color: var(--ink-2); }
+.stat-status { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; margin-top: 4px; }
+
+/* ============ STATUS BANNER ============ */
+.banner { border-radius: var(--radius); padding: 18px 16px; margin-bottom: 14px; border: 1px solid var(--border); }
+.banner .b-title { font-size: 20px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.banner .b-why { font-size: 14px; color: var(--ink-2); margin-top: 6px; }
+.banner-green { background: var(--good-bg); }
+.banner-amber { background: var(--warn-bg); }
+.banner-red   { background: var(--crit-bg); }
+.banner-gray  { background: var(--gray-bg); }
+.banner-blue  { background: var(--info-bg); }
+
+/* Status dot + icon text */
+.sdot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; }
+.s-green .sdot { background: var(--good); }
+.s-amber .sdot { background: var(--warn); }
+.s-red .sdot { background: var(--crit); }
+.s-gray .sdot { background: var(--gray-status); }
+.s-blue .sdot { background: var(--info); }
+
+/* ============ BUTTONS ============ */
+.btn {
+  display: block; width: 100%; text-align: center;
+  padding: 15px 16px; border-radius: 14px; font-weight: 650; font-size: 16px;
+  background: var(--surface); border: 1px solid var(--hairline); color: var(--ink);
+  margin-bottom: 10px;
+}
+.btn:active { transform: scale(0.985); }
+.btn-primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.btn-quiet { background: none; border: none; color: var(--accent); font-size: 14px; padding: 10px; }
+.btn-danger { color: var(--crit); border-color: var(--crit); }
+.btn-row { display: flex; gap: 10px; }
+.btn-row .btn { flex: 1; }
+.btn[disabled] { opacity: 0.4; pointer-events: none; }
+
+/* ============ TILES (test entry) ============ */
+.tile-group { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 4px; }
+.tile {
+  flex: 1 0 56px; min-height: 52px; border-radius: 12px;
+  border: 2px solid var(--hairline); background: var(--surface);
+  font-size: 17px; font-weight: 650; position: relative;
+}
+.tile .tile-swatch { display: block; width: 22px; height: 6px; border-radius: 3px; margin: 4px auto 0; }
+.tile.sel { border-color: var(--accent); background: var(--info-bg); }
+.tile.dim { opacity: 0.35; }
+
+/* ============ TIMER ============ */
+.timer-wrap { text-align: center; padding: 30px 0; }
+.timer-num { font-size: 72px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.timer-label { font-size: 18px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+.timer-warn { color: var(--ink-2); margin-top: 10px; font-size: 15px; }
+
+/* ============ LISTS / TIMELINE ============ */
+.tl-item { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--hairline); }
+.tl-item:last-child { border-bottom: none; }
+.tl-icon { font-size: 18px; flex: none; width: 28px; text-align: center; }
+.tl-body { flex: 1; min-width: 0; }
+.tl-when { font-size: 12px; color: var(--muted); }
+.tl-title { font-weight: 600; font-size: 15px; }
+.tl-detail { font-size: 13px; color: var(--ink-2); white-space: pre-wrap; }
+.tl-divider { text-align: center; font-size: 12px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.08em; padding: 12px 0 4px; border-top: 2px solid var(--accent); margin-top: 10px; }
+
+/* ============ PROGRESS (fresh fill) ============ */
+.prog-bar { height: 8px; border-radius: 4px; background: var(--hairline); overflow: hidden; margin: 8px 0 4px; }
+.prog-fill { height: 100%; background: var(--accent); border-radius: 4px; }
+.prog-steps { list-style: none; margin: 12px 0; }
+.prog-steps li { display: flex; align-items: center; gap: 10px; padding: 7px 0; font-size: 15px; }
+.prog-steps .p-mark { width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; flex: none; border: 2px solid var(--hairline); color: var(--muted); }
+.prog-steps li.done .p-mark { background: var(--good); border-color: var(--good); color: #fff; }
+.prog-steps li.current { font-weight: 700; }
+.prog-steps li.current .p-mark { border-color: var(--accent); color: var(--accent); }
+
+/* ============ FORMS / SETTINGS ============ */
+.field { margin-bottom: 12px; }
+.field label { display: block; font-size: 13px; font-weight: 600; color: var(--ink-2); margin-bottom: 4px; }
+.field-row { display: flex; gap: 10px; }
+.field-row .field { flex: 1; }
+details.why { margin-top: 10px; font-size: 14px; }
+details.why summary { color: var(--accent); font-weight: 600; cursor: pointer; }
+details.why p { margin-top: 6px; color: var(--ink-2); }
+.safety { font-size: 13px; color: var(--ink-2); background: var(--warn-bg); border-radius: 10px; padding: 10px 12px; margin-top: 10px; }
+
+/* ============ CHIPS / SEGMENTED ============ */
+.seg { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.seg button { padding: 8px 12px; border-radius: 999px; border: 1px solid var(--hairline); background: var(--surface); font-size: 13px; font-weight: 600; }
+.seg button.sel { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+
+/* ============ CHART ============ */
+.chart-card { padding: 14px 8px 8px 4px; }
+.chart-card h3 { padding-left: 12px; }
+.chart-tip {
+  position: fixed; z-index: 50; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 10px 12px; font-size: 13px; max-width: 240px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.18); pointer-events: none;
+}
+.legend { display: flex; flex-wrap: wrap; gap: 12px; padding: 6px 12px; font-size: 12px; color: var(--ink-2); }
+.legend .lg { display: inline-flex; align-items: center; gap: 5px; }
+.legend .lg i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+
+/* ============ TAB BAR ============ */
+.tabbar {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 40;
+  display: flex; background: var(--surface); border-top: 1px solid var(--hairline);
+  padding-bottom: env(safe-area-inset-bottom); height: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
+}
+.tabbar button { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 10px; font-weight: 600; color: var(--muted); }
+.tabbar button.sel { color: var(--accent); }
+.tabbar .t-ico { font-size: 20px; line-height: 1; }
+
+/* misc */
+.muted { color: var(--muted); font-size: 13px; }
+.spacer { height: 8px; }
+.result-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--hairline); font-size: 15px; }
+.result-row:last-child { border-bottom: none; }
+.badge { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+.badge-green { background: var(--good-bg); color: var(--good); }
+.badge-amber { background: var(--warn-bg); color: #8a6100; }
+.badge-red { background: var(--crit-bg); color: var(--crit); }
+.badge-gray { background: var(--gray-bg); color: var(--muted); }
+.badge-blue { background: var(--info-bg); color: var(--accent); }
+@media (prefers-color-scheme: dark) { .badge-amber { color: var(--warn); } }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="tip" class="chart-tip" style="display:none"></div>
+<script>
+/* ============================================================
+   VITA SPA XL4 WATER MANAGER
+   Single-file, offline, no-dependency swim-spa water assistant.
+
+   Code sections:
+     1. Constants (profile, modes, targets, test kit, chemicals)
+     2. Storage & state model
+     3. Pure chemistry/diagnostic engine  (no DOM access — testable)
+     4. Fresh-fill state machine helpers
+     5. Maintenance & dynamic water-change engine
+     6. Dose calculator
+     7. Rendering + navigation + event handlers
+     8. Charts (inline SVG, time-scaled)
+     9. Import / export
+    10. App initialization (guarded so this file runs under Node for tests)
+
+   Operating philosophy: TEST → DIAGNOSE → CORRECT ONE THING →
+   CIRCULATE → RETEST. Chlorine sanitizer with ozone assist; CYA is
+   tracked as a first-class metric because stabilized-chlorine
+   accumulation is the main reason this spa is drained every 3–4 months.
+   ============================================================ */
+
+"use strict";
+
+/* ============================================================
+   1. CONSTANTS
+   ============================================================ */
+
+const STORAGE_KEY = "vitaSpaXL4WaterManager_v1";
+const APP_VERSION = 1;
+
+const SPA_PROFILE = {
+  name: "Vita Spa XL4",
+  manufacturer: "Vita Spa",
+  model: "XL4",
+  volumeGallons: 1550,
+  volumeLitres: 5867,
+  sanitizerSystem: "chlorine",
+  ozoneSystem: true,
+  fillWater: "municipal",
+  regularBathers: 3,
+  maximumTypicalBathers: 7,
+  typicalUsePerWeek: "2-3 sessions",
+  waterChangeIntervalDays: 105
+};
+
+// Two first-class seasonal operating modes. Chemistry demand is NOT
+// assumed identical between them — mode + temperature ride every test
+// and session so the trend engine can compare seasons.
+const MODES = {
+  summer_swim: { id: "summer_swim", label: "Summer Swim / Play", defaultTemperatureF: 85,
+    defaultTemperatureC: 29.4, typicalActivity: "active swimming and kids playing" },
+  hot_soak:    { id: "hot_soak", label: "Fall / Winter Soak", defaultTemperatureF: 102,
+    defaultTemperatureC: 38.9, typicalActivity: "soaking" }
+};
+
+// Chemistry targets — configurable defaults. CYA has zones rather than
+// a single min/max: preferred, caution, and high thresholds (editable —
+// there is no single universal drain number).
+const SPA_TARGETS = {
+  freeChlorine: { min: 3, max: 5 },
+  pH:           { min: 7.2, idealMin: 7.4, idealMax: 7.6, max: 7.8 },
+  alkalinity:   { min: 80, max: 120 },
+  hardness:     { min: 150, max: 250 },
+  cya:          { preferredMin: 20, preferredMax: 50, caution: 100, high: 150 }
+};
+
+// EasyTest 7-in-1 strip kit. Values are the discrete bottle buckets —
+// the app never invents precision between them. The CYA pad has a
+// native RANGE bucket ("30–50") which must be stored as a range, never
+// collapsed to a midpoint.
+const TEST_KITS = {
+  easytest_7in1: {
+    id: "easytest_7in1",
+    name: "EasyTest 7-in-1 Pool & Spa Test Strips",
+    entry: "discrete",
+    immersionSeconds: 1,
+    readDelaySeconds: 15,
+    instructions: {
+      dip: "Immerse the strip for about 1 second and remove. Do not shake excess water off.",
+      wait: "Hold the strip horizontally for 15 seconds.",
+      read: "Compare immediately in natural light."
+    },
+    parameters: {
+      hardness:      { label: "Total Hardness", unit: "ppm", values: [0, 100, 250, 500, 1000] },
+      freeChlorine:  { label: "Free Chlorine", unit: "ppm", values: [0, 0.5, 1, 3, 5, 10] },
+      totalChlorine: { label: "Total Chlorine", unit: "ppm", values: [0, 0.5, 1, 3, 5, 10] },
+      cya:           { label: "Cyanuric Acid", unit: "ppm",
+                       values: [0, { lower: 30, upper: 50, label: "30–50" }, 100, 150, 240] },
+      alkalinity:    { label: "Total Alkalinity", unit: "ppm", values: [0, 40, 80, 120, 180, 240] },
+      pH:            { label: "pH", unit: "", values: [6.2, 6.8, 7.2, 7.8, 8.4, 9.0] }
+    },
+    padOrder: ["hardness", "freeChlorine", "totalChlorine", "cya", "alkalinity", "pH"],
+    hiddenParameters: ["bromine"]
+  }
+};
+
+// Approximate chart pad colors — decorative hints only; the number is
+// always shown and color is never the sole channel.
+const PAD_COLORS = {
+  hardness:      { 0:"#7ec8e3", 100:"#9db8d9", 250:"#8d9dcb", 500:"#7c72ad", 1000:"#6a4f96" },
+  freeChlorine:  { 0:"#fdf6cf", 0.5:"#f7ec9e", 1:"#f3e26f", 3:"#e9cf46", 5:"#d9a83e", 10:"#b97a3a" },
+  totalChlorine: { 0:"#fdf6cf", 0.5:"#f7ec9e", 1:"#f3e26f", 3:"#e9cf46", 5:"#d9a83e", 10:"#b97a3a" },
+  cya:           { 0:"#f7d9a8", "30-50":"#eab879", 100:"#d99054", 150:"#c46a3f", 240:"#a34a33" },
+  alkalinity:    { 0:"#f0e27a", 40:"#cfd97a", 80:"#a8c973", 120:"#7cb46e", 180:"#4f9a68", 240:"#2c7e5f" },
+  pH:            { 6.2:"#f2b04e", 6.8:"#ec9a45", 7.2:"#e5813f", 7.8:"#d9603c", 8.4:"#c74a48", 9.0:"#a93a52" }
+};
+
+// Chemical inventory (all products the user already owns). Doses are
+// NEVER hardcoded — a dose is only calculated once the actual
+// product-label numbers are configured in Settings.
+const DEFAULT_CHEMICALS = [
+  { id: "piper_alk_buffer", name: "Piper Clear Alk+ Buffer", role: "alkalinity increaser",
+    type: "alkalinity buffer", configured: true, purpose: "Raises total alkalinity.", dosing: null },
+  { id: "piper_ph_down", name: "Piper Clear pH Down", role: "pH decreaser",
+    type: "pH reducer", configured: true, purpose: "Lowers pH.", dosing: null },
+  { id: "aqua_granular", name: "Aqua Granular", role: "routine sanitizer",
+    type: "stabilized chlorine granules", configured: true,
+    purpose: "Stabilized chlorine sanitizer — adds CYA with every dose.", dosing: null },
+  { id: "piper_cal", name: "Piper Clear Cal", role: "hardness increaser",
+    type: "calcium hardness increaser", configured: true, purpose: "Raises calcium hardness.", dosing: null },
+  { id: "aqua_shock", name: "Aqua Shock", role: "oxidizer",
+    type: "chlorinating shock", configured: true, purpose: "Chlorinating shock / oxidation.", dosing: null },
+  { id: "aqua_ph_plus", name: "Aqua pH+ Plus", role: "pH increaser",
+    type: "pH increaser", configured: true, purpose: "Raises pH.", dosing: null },
+  { id: "easytest_7in1", name: "EasyTest 7-in-1 Test Strips", role: "testing",
+    type: "test strips", configured: true, purpose: "Water testing.", dosing: null }
+];
+
+// Fresh-fill / startup state machine, in required order. cya_baseline
+// records the fresh-fill CYA for longitudinal analysis — it never gates.
+const STARTUP_STATES = ["refill", "initial_test", "alkalinity", "ph", "hardness",
+  "chlorine", "cya_baseline", "final_test", "complete"];
+
+const STARTUP_STEP_LABELS = {
+  refill: "Refill", initial_test: "Initial test", alkalinity: "Alkalinity", ph: "pH",
+  hardness: "Hardness", chlorine: "Chlorine", cya_baseline: "CYA baseline",
+  final_test: "Final test", complete: "Complete"
+};
+
+const DEFAULT_INTERVALS = {
+  shockDays: 7,
+  filterRinseDays: 10,          // spec: every 1–2 weeks
+  filterCleanDays: 30,
+  filterReplaceMonths: 12,      // per manufacturer/user setting
+  waterChangeDays: 105,         // nominal 3.5 months; dynamic logic can pull this in
+  quickTestDays: 3,             // FC / pH freshness tolerance
+  fullTestDays: 7,
+  hardnessTestDays: 30
+};
+
+const PARAM_LABELS = { freeChlorine: "Free Chlorine", totalChlorine: "Total Chlorine",
+  pH: "pH", alkalinity: "Alkalinity", hardness: "Hardness", cya: "CYA", combined: "Est. Combined Cl" };
+// Dashboard card order (spec §10) and the order diagnose() reports in.
+const DASH_ORDER = ["freeChlorine", "totalChlorine", "pH", "alkalinity", "hardness", "cya"];
+
+const EVENT_TYPES = ["water_test", "chemical_added", "shock", "swim_session", "filter_rinse",
+  "filter_clean", "filter_replace", "drain_started", "refill", "startup_complete",
+  "mode_change", "ozone_change", "note"];
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/* ============================================================
+   2. STORAGE & STATE MODEL
+   ============================================================ */
+
+function defaultState() {
+  return {
+    version: APP_VERSION,
+    spaProfile: JSON.parse(JSON.stringify(SPA_PROFILE)),
+    operatingMode: "summer_swim",
+    ozone: { installed: true, enabled: true },
+    testKit: "easytest_7in1",
+    targets: JSON.parse(JSON.stringify(SPA_TARGETS)),
+    chemicalInventory: JSON.parse(JSON.stringify(DEFAULT_CHEMICALS)),
+    events: [],
+    maintenance: {
+      intervals: Object.assign({}, DEFAULT_INTERVALS),
+      lastRefillDate: null
+    },
+    startup: { active: false, state: null },
+    settings: {
+      spaName: "Vita Spa XL4",
+      showEventMarkers: true,
+      modeTemps: { summer_swim: 85, hot_soak: 102 }   // editable per-mode default °F
+    }
+  };
+}
+
+let _idCounter = 0;
+function makeId(prefix, timestamp) {
+  _idCounter += 1;
+  return prefix + "_" + timestamp.replace(/[^0-9]/g, "").slice(0, 14) + "_" + _idCounter;
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return defaultState();
+    const parsed = JSON.parse(raw);
+    // Shallow-merge onto defaults so new fields appear after upgrades.
+    const base = defaultState();
+    const merged = Object.assign(base, parsed);
+    merged.maintenance = Object.assign(base.maintenance, parsed.maintenance || {});
+    merged.maintenance.intervals = Object.assign(Object.assign({}, DEFAULT_INTERVALS), (parsed.maintenance || {}).intervals || {});
+    merged.settings = Object.assign(base.settings, parsed.settings || {});
+    merged.settings.modeTemps = Object.assign({ summer_swim: 85, hot_soak: 102 }, (parsed.settings || {}).modeTemps || {});
+    merged.ozone = Object.assign(base.ozone, parsed.ozone || {});
+    return merged;
+  } catch (e) {
+    return defaultState();
+  }
+}
+
+function saveState(state) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function currentModeTemp(state) {
+  return state.settings.modeTemps[state.operatingMode] ||
+    MODES[state.operatingMode].defaultTemperatureF;
+}
+
+// Append an event and keep the log chronologically sorted. Water tests
+// additionally record operating mode, temperature, and water-cycle id.
+function addEvent(state, type, data, notes, when) {
+  const ts = (when && typeof when.toISOString === "function") ? when.toISOString() : when;
+  const d = new Date(ts);
+  const ev = {
+    id: makeId(type === "water_test" ? "test" : "ev", ts),
+    timestamp: ts,
+    localDate: localDateStr(d),
+    localTime: localTimeStr(d),
+    year: d.getFullYear(),
+    type: type,
+    data: data || {},
+    notes: notes || ""
+  };
+  if (type === "water_test") {
+    ev.waterCycleId = currentCycleId(state);
+    if (ev.data.operatingMode == null) ev.data.operatingMode = state.operatingMode;
+    if (ev.data.waterTemperatureF == null) ev.data.waterTemperatureF = currentModeTemp(state);
+  }
+  state.events.push(ev);
+  state.events.sort((a, b) => a.timestamp < b.timestamp ? -1 : 1);
+  return ev;
+}
+
+function localDateStr(d) {
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+function localTimeStr(d) {
+  return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+}
+
+/* ============================================================
+   3. PURE CHEMISTRY / DIAGNOSTIC ENGINE
+   Every function here is DOM-free and takes explicit inputs
+   (including `now`) so it can run under Node for the test suite.
+   ============================================================ */
+
+// A stored reading value is either  { value, approximate }  or a range
+// { lower, upper, approximate:true } — from "between two colors" OR the
+// CYA pad's native 30–50 bucket. asInterval() gives a uniform [lo, hi]
+// view. Ranges are never collapsed to midpoints in storage; midpoints
+// exist only for chart geometry and trend comparison, clearly marked.
+function asInterval(v) {
+  if (v == null) return null;
+  if (typeof v === "number") return { lo: v, hi: v, approximate: false };
+  if (v.lower != null && v.upper != null) return { lo: v.lower, hi: v.upper, approximate: true };
+  if (v.value != null) return { lo: v.value, hi: v.value, approximate: !!v.approximate };
+  return null;
+}
+
+// Classify an interval against a [min,max] target:
+//  "in" | "low" | "high" | "borderline" (interval crosses a boundary).
+function rangeStatus(v, min, max) {
+  const iv = asInterval(v);
+  if (!iv) return "unknown";
+  if (iv.lo >= min && iv.hi <= max) return "in";
+  if (iv.hi < min) return "low";
+  if (iv.lo > max) return "high";
+  return "borderline";
+}
+
+/* ---- Free chlorine (buckets 0/0.5/1/3/5/10; target 3–5) ----
+   0 → depleted, block. 0.5–1 → too low, block. 3–5 → normal.
+   10 → high: block use AND do not add more sanitizer.
+   Ozone reduces demand but NEVER excuses a missing residual — nothing
+   here consults the ozone setting. */
+function interpretFC(v, targets) {
+  const t = (targets || SPA_TARGETS).freeChlorine;
+  const iv = asInterval(v);
+  if (!iv) return { status: "gray", label: "Not tested", blocksUse: false };
+  if (iv.approximate) {
+    const rs = rangeStatus(v, t.min, t.max);
+    if (rs === "in") return { status: "green", label: "In range", blocksUse: false };
+    if (rs === "low") return { status: "red", label: "Low", blocksUse: true };
+    if (rs === "high") return { status: iv.lo >= 10 ? "red" : "amber", label: "High", blocksUse: iv.lo >= 10 };
+    // Ambiguous read crossing the target boundary: retest, never over-correct.
+    return { status: "amber", label: "Borderline — retest", blocksUse: false, borderline: true };
+  }
+  const c = iv.lo;
+  if (c === 0)  return { status: "red", label: "Depleted", blocksUse: true };
+  if (c <= 1)   return { status: "red", label: "Too low", blocksUse: true };
+  if (c >= 10)  return { status: "red", label: "High", blocksUse: true, doNotAdd: true };
+  if (c >= t.min && c <= t.max) return { status: "green", label: "In range", blocksUse: false };
+  if (c > t.max) return { status: "amber", label: "Above target", blocksUse: false };
+  return { status: "red", label: "Too low", blocksUse: true };
+}
+
+// Total chlorine is tracked for the combined-chlorine estimate; it has
+// no target band of its own and never blocks use directly.
+function interpretTC(v) {
+  const iv = asInterval(v);
+  if (!iv) return { status: "gray", label: "Not tested" };
+  return { status: "blue", label: "Tracked" };
+}
+
+// Estimated combined chlorine — only computable when both reads are
+// exact strip buckets; an approximate read on either side yields null
+// rather than a fabricated number (strip resolution is coarse).
+function combinedChlorine(fcV, tcV) {
+  const fc = asInterval(fcV), tc = asInterval(tcV);
+  if (!fc || !tc || fc.approximate || tc.approximate) return null;
+  return Math.max(0, tc.lo - fc.lo);
+}
+
+function interpretPH(v, targets) {
+  const t = (targets || SPA_TARGETS).pH;
+  const iv = asInterval(v);
+  if (!iv) return { status: "gray", label: "Not tested" };
+  const rs = rangeStatus(v, t.min, t.max);
+  if (rs === "in") return { status: "green", label: "In range" };
+  if (rs === "borderline") return { status: "amber", label: "Borderline — retest", borderline: true };
+  if (rs === "low") return { status: iv.hi <= 6.2 ? "red" : "amber", label: "Low" };
+  return { status: iv.lo >= 8.4 ? "red" : "amber", label: "High" };
+}
+
+function interpretAlkalinity(v, targets) {
+  const t = (targets || SPA_TARGETS).alkalinity;
+  const iv = asInterval(v);
+  if (!iv) return { status: "gray", label: "Not tested" };
+  const rs = rangeStatus(v, t.min, t.max);
+  if (rs === "in") return { status: "green", label: "In range" };
+  if (rs === "borderline") return { status: "amber", label: "Borderline — retest", borderline: true };
+  if (rs === "low") return { status: "amber", label: "Low" };
+  return { status: iv.lo >= 240 ? "red" : "amber", label: iv.lo >= 240 ? "Very high" : "High" };
+}
+
+// Hardness (0/100/250/500/1000; target ~150–250). The strip cannot
+// resolve 150–200, so 250 counts as acceptable and hardness always
+// displays with the ~ approximate marker.
+function interpretHardness(v, targets) {
+  const iv = asInterval(v);
+  if (!iv) return { status: "gray", label: "Not tested" };
+  if (iv.hi <= 0)   return { status: "amber", label: "Very low" };
+  if (iv.hi <= 100) return { status: "amber", label: "Low" };
+  if (iv.lo >= 500) return { status: "amber", label: "High" };
+  return { status: "green", label: "In range" };
+}
+
+/* ---- CYA (buckets 0 / 30–50 / 100 / 150 / 240) ----
+   Zones, not a single band: preferred 20–50, caution ≥100, high ≥150,
+   very high ≥240. CYA never blocks same-day use, but it drives the
+   dynamic water-change recommendation (stabilized chlorine accumulates
+   CYA — the main reason this spa is drained every 3–4 months). */
+function interpretCYA(v, targets) {
+  const t = (targets || SPA_TARGETS).cya;
+  const iv = asInterval(v);
+  if (!iv) return { status: "gray", label: "Not tested" };
+  if (iv.lo >= 240) return { status: "red", label: "Very high", zone: "very_high" };
+  if (iv.lo >= t.high) return { status: "amber", label: "High", zone: "high" };
+  if (iv.lo >= t.caution) return { status: "amber", label: "Elevated", zone: "caution" };
+  if (iv.hi > t.caution) return { status: "amber", label: "Possibly elevated — retest", zone: "caution", borderline: true };
+  if (iv.hi <= 0) return { status: "blue", label: "No stabilizer", zone: "none" };
+  if (iv.hi > t.preferredMax) return { status: "amber", label: "Above preferred — watch", zone: "watch" };
+  return { status: "green", label: "Good", zone: "preferred" };
+}
+
+const INTERPRETERS = { freeChlorine: interpretFC, totalChlorine: interpretTC, pH: interpretPH,
+  alkalinity: interpretAlkalinity, hardness: interpretHardness, cya: interpretCYA };
+
+function interpretParam(param, v, targets) {
+  return INTERPRETERS[param](v, targets);
+}
+
+// Format a reading for display without inventing precision. The CYA
+// pad's native 30–50 bucket displays as "30–50" (that IS the reading);
+// between-color merges display with a ~ marker; hardness is always ~.
+function formatValue(param, v) {
+  const iv = asInterval(v);
+  if (!iv) return "—";
+  const unit = param === "pH" ? "" : " ppm";
+  if (iv.approximate && iv.lo !== iv.hi) return (param === "cya" ? "" : "~") + iv.lo + "–" + iv.hi + unit;
+  const prefix = (param === "hardness" || iv.approximate) ? "~" : "";
+  return prefix + iv.lo + unit;
+}
+
+/* ---------- Latest readings & freshness ---------- */
+
+function waterTests(state) {
+  return state.events.filter(e => e.type === "water_test");
+}
+
+function latestReading(state, param) {
+  const tests = waterTests(state);
+  for (let i = tests.length - 1; i >= 0; i--) {
+    if (tests[i].data.values && tests[i].data.values[param] != null) {
+      return { value: tests[i].data.values[param], test: tests[i] };
+    }
+  }
+  return null;
+}
+
+function ageDays(iso, now) {
+  return (now.getTime() - new Date(iso).getTime()) / DAY_MS;
+}
+
+// Bather-load classification (§32): 1–3 normal · 4–5 moderate/high ·
+// 6–7+ high. Moderate-or-worse sessions tighten sanitizer freshness.
+function loadClass(ev) {
+  const b = (ev.data || {}).bathers || 0;
+  if (b >= 6) return "high";
+  if (b >= 4) return "moderate";
+  return "normal";
+}
+function isHeavySession(ev) {
+  return loadClass(ev) !== "normal" || (ev.data || {}).duration === "60+ min";
+}
+
+// Per-parameter freshness. A heavy session after the last sanitizer
+// reading invalidates it — require fresher data before relying on it.
+function paramFreshness(state, param, now) {
+  const r = latestReading(state, param);
+  const iv = state.maintenance.intervals;
+  const tol = (param === "hardness") ? iv.hardnessTestDays
+            : (param === "freeChlorine" || param === "pH") ? iv.quickTestDays
+            : iv.fullTestDays;
+  if (!r) return { tested: false, stale: true, days: null, toleranceDays: tol };
+  const days = ageDays(r.test.timestamp, now);
+  let stale = days > tol;
+  if ((param === "freeChlorine" || param === "pH") && !stale) {
+    const heavySince = state.events.some(e =>
+      e.type === "swim_session" && e.timestamp > r.test.timestamp && isHeavySession(e));
+    if (heavySince) stale = true;
+  }
+  return { tested: true, stale, days, toleranceDays: tol, reading: r };
+}
+
+/* ---------- Diagnostic priority engine ----------
+   Priority: 1 FC safety → 2 alkalinity → 3 pH → 4 hardness →
+   5 combined chlorine / shock → 6 CYA → 7 maintenance.
+   One corrective chemistry action at a time: the UI surfaces the first
+   action as "do this first"; info-severity notes (combined chlorine,
+   CYA) ride alongside rather than being suppressed by it. Borderline
+   (ambiguous range) readings recommend a retest, never a correction. */
+function diagnose(values, targets, context) {
+  targets = targets || SPA_TARGETS;
+  const actions = [];
+  const v = values || {};
+
+  // 1. FREE CHLORINE — sanitizer safety overrides normal sequencing.
+  if (v.freeChlorine != null) {
+    const fc = interpretFC(v.freeChlorine, targets);
+    const iv = asInterval(v.freeChlorine);
+    if (fc.borderline) {
+      actions.push({ priority: 1, severity: "amber", parameter: "freeChlorine",
+        title: "Confirm free chlorine with a retest",
+        message: "The strip read was between two colors across the target boundary. Retest before correcting.",
+        blocksUse: false, retestOnly: true });
+    } else if (fc.doNotAdd || (iv && iv.lo >= 10)) {
+      actions.push({ priority: 1, severity: "red", parameter: "freeChlorine",
+        title: "Chlorine is high",
+        message: "Do not add more sanitizer. Allow the level to fall and retest before using the spa.",
+        blocksUse: true, doNotAdd: true });
+    } else if (fc.blocksUse) {
+      actions.push({ priority: 1, severity: "red", parameter: "freeChlorine",
+        title: "Restore free chlorine",
+        message: iv && iv.hi <= 0 ? "Free chlorine is depleted. Do not use the spa until a residual is restored."
+                                  : "Free chlorine is below the normal operating range. Restore chlorine before use.",
+        blocksUse: true });
+    }
+  }
+
+  // 2. ALKALINITY — corrected before pH.
+  let alkConfirmedIn = false;
+  if (v.alkalinity != null) {
+    const rs = rangeStatus(v.alkalinity, targets.alkalinity.min, targets.alkalinity.max);
+    alkConfirmedIn = rs === "in";
+    if (rs === "low" || rs === "high") {
+      actions.push({ priority: 2, severity: "amber", parameter: "alkalinity",
+        title: "Correct alkalinity first",
+        message: rs === "low" ? "Total alkalinity is low. Correct alkalinity before adjusting pH."
+                              : "Total alkalinity is high. Correct alkalinity gradually before adjusting pH.",
+        blocksPHAdjustment: true });
+    } else if (rs === "borderline") {
+      actions.push({ priority: 2, severity: "amber", parameter: "alkalinity",
+        title: "Alkalinity is borderline",
+        message: "The reading spans the target boundary. Retest before making any correction.",
+        retestOnly: true, blocksPHAdjustment: true });
+    }
+  }
+
+  // 3. pH — only once alkalinity is confirmed in range.
+  if (v.pH != null) {
+    const rs = rangeStatus(v.pH, targets.pH.min, targets.pH.max);
+    const alkOk = v.alkalinity == null ? true : alkConfirmedIn;
+    if (alkOk && (rs === "low" || rs === "high")) {
+      actions.push({ priority: 3, severity: "amber", parameter: "pH",
+        title: "Correct pH",
+        message: rs === "low" ? "pH is below the target range." : "pH is above the target range." });
+    } else if (alkOk && rs === "borderline") {
+      actions.push({ priority: 3, severity: "amber", parameter: "pH",
+        title: "pH is borderline", message: "Retest before correcting.", retestOnly: true });
+    }
+  }
+
+  // 4. HARDNESS — informational.
+  if (v.hardness != null) {
+    const iv = asInterval(v.hardness);
+    if (iv && iv.hi <= 100) {
+      actions.push({ priority: 4, severity: "info", parameter: "hardness",
+        title: "Hardness appears low",
+        message: "Consider raising calcium hardness with Piper Clear Cal, using label-based dosing." });
+    } else if (iv && iv.lo >= 500) {
+      actions.push({ priority: 4, severity: "info", parameter: "hardness",
+        title: "Hardness is high",
+        message: "Do not add hardness increaser. High hardness is usually resolved at the next water change." });
+    }
+  }
+
+  // 5. COMBINED CHLORINE — a soft note from one coarse reading (≥2 ppm
+  // estimated); the pattern engine escalates only on repeats. This note
+  // rides alongside any blocking FC action, never replaces it.
+  const cc = combinedChlorine(v.freeChlorine, v.totalChlorine);
+  if (cc != null && cc >= 2) {
+    actions.push({ priority: 5, severity: "info", parameter: "combined",
+      title: "Combined chlorine may be elevated",
+      message: "Estimated combined chlorine is ~" + cc + " ppm. Evaluate sanitizer, shock status, and recent bather load. One coarse strip result is not conclusive — retest and watch the trend." });
+  }
+
+  // 6. CYA — never blocks use; drives water-change planning.
+  if (v.cya != null) {
+    const cy = interpretCYA(v.cya, targets);
+    if (cy.zone === "very_high") {
+      actions.push({ priority: 6, severity: "red", parameter: "cya",
+        title: "CYA is very high",
+        message: "Water replacement is likely preferable to continuing stabilized chlorine additions. Water change strongly recommended." });
+    } else if (cy.zone === "high") {
+      actions.push({ priority: 6, severity: "amber", parameter: "cya",
+        title: "CYA is high",
+        message: "Strongly consider dilution or a refill instead of continuing stabilized chlorine buildup." });
+    } else if (cy.zone === "caution" && !cy.borderline) {
+      actions.push({ priority: 6, severity: "info", parameter: "cya",
+        title: "CYA is elevated",
+        message: "Watch chlorine effectiveness and start planning water management." });
+    }
+  }
+
+  return actions.sort((a, b) => a.priority - b.priority);
+}
+
+/* ---------- "Can we use it?" engine ----------
+   Ozone never overrides the chlorine requirement — the ozone setting is
+   deliberately absent from this function. */
+function canWeUseIt(state, now) {
+  if (startupInProgress(state)) {
+    return { verdict: "NOT_YET", reason: "Fresh-fill setup is in progress. Finish water setup before using the spa." };
+  }
+  const fcFresh = paramFreshness(state, "freeChlorine", now);
+  if (!fcFresh.tested) {
+    return { verdict: "TEST_FIRST", reason: "No sanitizer reading yet. Test before using the spa." };
+  }
+  if (fcFresh.stale) {
+    return { verdict: "TEST_FIRST", reason: "Your sanitizer reading is too old to rely on. Test before using the spa." };
+  }
+  const lastTest = fcFresh.reading.test;
+  const chemAfter = state.events.some(e =>
+    (e.type === "chemical_added" || e.type === "shock") && e.timestamp > lastTest.timestamp);
+  if (chemAfter) {
+    return { verdict: "TEST_FIRST", reason: "Chemicals were added after the last test. Circulate and retest before using the spa." };
+  }
+  const values = {};
+  DASH_ORDER.forEach(p => { const r = latestReading(state, p); if (r) values[p] = r.value; });
+  const actions = diagnose(values, state.targets);
+  const blocking = actions.find(a => a.blocksUse);
+  if (blocking) {
+    return { verdict: "NOT_YET", reason: blocking.message || blocking.title, action: blocking };
+  }
+  // A borderline sanitizer read is not proof of a safe residual.
+  if (actions.some(a => a.parameter === "freeChlorine" && a.retestOnly)) {
+    return { verdict: "TEST_FIRST", reason: "The last free-chlorine read was between two colors across the target boundary. Retest before using the spa." };
+  }
+  const obs = lastTest.data.observations;
+  if (obs && obs.appearance === "very cloudy") {
+    return { verdict: "NOT_YET", reason: "Water was recorded as very cloudy. Resolve clarity before using the spa." };
+  }
+  const phFresh = paramFreshness(state, "pH", now);
+  if (phFresh.stale) {
+    return { verdict: "TEST_FIRST", reason: "The pH reading is out of date. Run a quick test before using the spa." };
+  }
+  return { verdict: "YES", reason: "Latest readings are within normal operating ranges." };
+}
+
+/* ---------- Overall Today status ---------- */
+function overallStatus(state, now) {
+  if (startupInProgress(state)) {
+    return { color: "blue", title: "Fresh fill in progress", why: "Continue the water setup wizard to finish preparing the water." };
+  }
+  const fcFresh = paramFreshness(state, "freeChlorine", now);
+  if (!fcFresh.tested) {
+    return { color: "gray", title: "Test water first", why: "No water tests recorded yet. Run a test to see where things stand." };
+  }
+  if (fcFresh.stale) {
+    return { color: "gray", title: "Test water first",
+      why: "The sanitizer reading is " + (fcFresh.days != null ? Math.floor(fcFresh.days) + " day(s) old" : "out of date") + ". Test before relying on it." };
+  }
+  const values = {};
+  DASH_ORDER.forEach(p => { const r = latestReading(state, p); if (r) values[p] = r.value; });
+  const actions = diagnose(values, state.targets);
+  const blocking = actions.find(a => a.blocksUse);
+  if (blocking) {
+    return { color: "red", title: "Do not use yet", why: blocking.message || blocking.title, action: blocking };
+  }
+  if (actions.length > 0) {
+    return { color: "amber", title: "Water needs attention", why: actions[0].message || actions[0].title, action: actions[0] };
+  }
+  return { color: "green", title: "Water looks good", why: "Water is balanced and the latest sanitizer reading is current." };
+}
+
+/* ---------- Water age, cycles & dynamic water-change logic ---------- */
+function waterAgeDays(state, now) {
+  const d = state.maintenance.lastRefillDate;
+  if (!d) return null;
+  return Math.floor(ageDays(d, now));
+}
+
+function currentCycleId(state) {
+  const d = state.maintenance.lastRefillDate;
+  if (!d) return "cycle_initial";
+  return "cycle_" + localDateStr(new Date(d)).replace(/-/g, "_");
+}
+
+function waterCycles(state) {
+  const cycles = [];
+  let current = { id: "cycle_initial", start: null, events: [] };
+  state.events.forEach(ev => {
+    if (ev.type === "refill") {
+      if (current.events.length > 0 || current.start) cycles.push(current);
+      current = { id: "cycle_" + ev.localDate.replace(/-/g, "_"), start: ev.timestamp, events: [] };
+    }
+    current.events.push(ev);
+  });
+  cycles.push(current);
+  return cycles;
+}
+
+/* Dynamic water-change recommendation (§20): the calendar is only the
+   baseline — CYA and water condition can pull the refill forward.
+   Returns { level: "none"|"plan"|"strong"|"due", message }. */
+function waterChangeAdvice(state, now) {
+  const age = waterAgeDays(state, now);
+  const interval = state.maintenance.intervals.waterChangeDays;
+  const cyaR = latestReading(state, "cya");
+  const cyaIv = cyaR ? asInterval(cyaR.value) : null;
+
+  if (cyaIv && cyaIv.lo >= 240) {
+    return { level: "due", message: "CYA is very high (~" + cyaIv.lo + " ppm). Water change strongly recommended — replacement is preferable to continuing stabilized chlorine additions." };
+  }
+  if (cyaIv && cyaIv.lo >= state.targets.cya.high) {
+    return { level: "strong", message: "CYA is high (~" + cyaIv.lo + " ppm). Strongly consider dilution or a refill even though the water is " + (age == null ? "of unknown age" : age + " days old") + "." };
+  }
+  if (age != null && age >= interval) {
+    return { level: "due", message: "Water change due (" + age + " / " + interval + " days)." };
+  }
+  // Condition flags: elevated CYA late in cycle, cloudiness, frequent corrections.
+  const cyaElevated = cyaIv && cyaIv.lo >= state.targets.cya.caution;
+  if (age != null && age >= 80 && cyaElevated) {
+    return { level: "plan", message: "Water is " + age + " days old and CYA is elevated. Start planning a water change." };
+  }
+  const cutoff = new Date(now.getTime() - 30 * DAY_MS).toISOString();
+  const recentChems = state.events.filter(e => e.type === "chemical_added" && e.timestamp >= cutoff).length;
+  const recentCloudy = waterTests(state).filter(t => t.timestamp >= cutoff &&
+    t.data.observations && ["cloudy", "very cloudy"].includes(t.data.observations.appearance)).length;
+  if (age != null && age >= 60 && (recentChems >= 3 || recentCloudy >= 2)) {
+    return { level: "plan", message: "Water is " + age + " days old and has needed frequent attention lately. Consider an earlier water change." };
+  }
+  if (age != null && age >= interval - 20) {
+    return { level: "plan", message: "Water is entering the later part of its cycle (" + age + " / ~" + interval + " days)." };
+  }
+  return { level: "none", message: age == null ? "No refill recorded yet." : "Continue normal maintenance (" + age + " / ~" + interval + " days)." };
+}
+
+/* ---------- Cycle summaries (§43) ---------- */
+function cycleSummary(cycle, targets, now) {
+  const tests = cycle.events.filter(e => e.type === "water_test");
+  const pct = (param) => {
+    const withP = tests.filter(t => t.data.values && t.data.values[param] != null);
+    if (withP.length === 0) return null;
+    const inR = withP.filter(t => interpretParam(param, t.data.values[param], targets).status === "green");
+    return Math.round(100 * inR.length / withP.length);
+  };
+  const outCounts = {};
+  DASH_ORDER.forEach(p => {
+    outCounts[p] = tests.filter(t => t.data.values && t.data.values[p] != null &&
+      !["green", "blue", "gray"].includes(interpretParam(p, t.data.values[p], targets).status)).length;
+  });
+  let worst = null;
+  DASH_ORDER.forEach(p => { if (outCounts[p] > 0 && (worst == null || outCounts[p] > outCounts[worst])) worst = p; });
+  const cyaTests = tests.filter(t => t.data.values && t.data.values.cya != null);
+  const sessions = cycle.events.filter(e => e.type === "swim_session");
+  const end = now ? now.toISOString() : (cycle.events.length ? cycle.events[cycle.events.length - 1].timestamp : cycle.start);
+  return {
+    id: cycle.id,
+    start: cycle.start,
+    end: end,
+    days: cycle.start ? Math.max(0, Math.floor((new Date(end).getTime() - new Date(cycle.start).getTime()) / DAY_MS)) : null,
+    testCount: tests.length,
+    sessionCount: sessions.length,
+    highLoadCount: sessions.filter(s => loadClass(s) === "high").length,
+    shockCount: cycle.events.filter(e => e.type === "shock").length,
+    inRangePct: { freeChlorine: pct("freeChlorine"), pH: pct("pH"), alkalinity: pct("alkalinity") },
+    cyaStart: cyaTests.length ? cyaTests[0].data.values.cya : null,
+    cyaEnd: cyaTests.length ? cyaTests[cyaTests.length - 1].data.values.cya : null,
+    mostOutOfRange: worst
+  };
+}
+
+/* ---------- Trend direction (dashboard cards) ----------
+   Interval-ordered comparison — range readings (including the CYA
+   30–50 bucket) are never collapsed to midpoints. An interval is
+   "higher" only when it sits entirely above the other; overlapping
+   intervals compare as equal, which is the honest strip answer. */
+function ivGreater(x, y) { return x.lo > y.hi; }
+function trendDirection(vals) {
+  const ivs = vals.map(asInterval).filter(Boolean);
+  if (ivs.length < 3) return "insufficient";
+  const [a, b, c] = ivs.slice(-3);
+  if (ivGreater(c, a) && !ivGreater(b, c)) return "rising";
+  if (ivGreater(a, c) && !ivGreater(c, b)) return "falling";
+  return "stable";
+}
+
+function paramTrend(state, param) {
+  const vals = waterTests(state)
+    .filter(t => t.data.values && t.data.values[param] != null)
+    .map(t => t.data.values[param]);
+  return trendDirection(vals);
+}
+
+/* ---------- Pattern detection (deterministic, explainable) ---------- */
+function detectPatterns(state, now) {
+  const patterns = [];
+  const tests = waterTests(state);
+  const targets = state.targets;
+
+  // Repeated low FC: 3 of the last 5 normal-context readings low.
+  const normalFC = tests.filter(t => (t.data.context || "normal") === "normal" &&
+    t.data.values && t.data.values.freeChlorine != null).slice(-5);
+  if (normalFC.length >= 3) {
+    const low = normalFC.filter(t => asInterval(t.data.values.freeChlorine).hi <= 1);
+    if (low.length >= 3) {
+      patterns.push({ id: "low_fc", title: "Free chlorine frequently runs low",
+        detail: "At least 3 of the last 5 normal checks were below target.",
+        suggestion: "Review sanitizer routine after restoring chlorine. Ozone assists but never replaces a residual." });
+    }
+  }
+
+  // Post-play chlorine drop: FC normal before a high-load (6–7 bather)
+  // session, low within 24h after — twice or more. One post-play low
+  // reading never condemns the normal sanitizer strategy.
+  let drops = 0;
+  state.events.forEach(ev => {
+    if (ev.type !== "swim_session" || loadClass(ev) !== "high") return;
+    const before = tests.filter(t => t.timestamp < ev.timestamp && t.data.values && t.data.values.freeChlorine != null).pop();
+    const after = tests.find(t => t.timestamp > ev.timestamp &&
+      (new Date(t.timestamp) - new Date(ev.timestamp)) <= 24 * 3600 * 1000 &&
+      t.data.values && t.data.values.freeChlorine != null);
+    if (before && after &&
+        interpretFC(before.data.values.freeChlorine, targets).status === "green" &&
+        asInterval(after.data.values.freeChlorine).hi <= 1) drops++;
+  });
+  if (drops >= 2) {
+    patterns.push({ id: "post_play_drop", title: "Chlorine commonly drops after high-load play sessions",
+      detail: "High bather loads create a large sanitizer demand. This is expected demand, not a failing sanitizer strategy.",
+      suggestion: "Check free chlorine after play dates and shock when load has been heavy." });
+  }
+
+  // CYA accumulation across the current water cycle. Compared as
+  // intervals/bucket order — the 30–50 bucket is never a midpoint.
+  const cid = currentCycleId(state);
+  const cyaCycle = tests.filter(t => t.waterCycleId === cid && t.data.values && t.data.values.cya != null)
+    .map(t => asInterval(t.data.values.cya));
+  if (cyaCycle.length >= 3) {
+    let nonDecreasing = true;
+    for (let i = 1; i < cyaCycle.length; i++)
+      if (cyaCycle[i].lo < cyaCycle[i - 1].lo || cyaCycle[i].hi < cyaCycle[i - 1].hi) nonDecreasing = false;
+    // Rise is conservative: the newest reading's floor must clear the
+    // first reading's ceiling by 50+ ppm — provable from the buckets.
+    if (nonDecreasing && cyaCycle[cyaCycle.length - 1].lo - cyaCycle[0].hi >= 50) {
+      patterns.push({ id: "cya_accumulating", title: "CYA is accumulating during this water cycle",
+        detail: "Stabilized chlorine adds CYA with every dose; it only leaves with the water.",
+        suggestion: "Refill planning recommended." });
+    }
+  }
+
+  // Seasonal difference: enough data in both modes → compare FC-low rates.
+  const byMode = mode => tests.filter(t => t.data.operatingMode === mode &&
+    t.data.values && t.data.values.freeChlorine != null);
+  const summer = byMode("summer_swim"), soak = byMode("hot_soak");
+  if (summer.length >= 3 && soak.length >= 3) {
+    const lowRate = arr => arr.filter(t => asInterval(t.data.values.freeChlorine).hi <= 1).length / arr.length;
+    if (lowRate(soak) > lowRate(summer) + 0.2) {
+      patterns.push({ id: "seasonal_demand", title: "Chlorine demand appears higher during hot-soak operation",
+        detail: "Low free-chlorine readings are more frequent in Fall/Winter Soak mode than in Summer Swim mode.",
+        suggestion: "Expect to test and dose a little more often at 102°F." });
+    } else if (lowRate(summer) > lowRate(soak) + 0.2) {
+      patterns.push({ id: "seasonal_demand", title: "Chlorine demand appears higher during summer play",
+        detail: "Low free-chlorine readings are more frequent in Summer Swim mode.",
+        suggestion: "High-load play sessions consume sanitizer quickly — test after use." });
+    }
+  }
+
+  // Combined chlorine building: last 2+ full tests with estimate ≥2.
+  const ccTests = tests.filter(t => t.data.values &&
+    combinedChlorine(t.data.values.freeChlorine, t.data.values.totalChlorine) != null).slice(-2);
+  if (ccTests.length >= 2 && ccTests.every(t =>
+    combinedChlorine(t.data.values.freeChlorine, t.data.values.totalChlorine) >= 2)) {
+    patterns.push({ id: "cc_buildup", title: "Combined chlorine may be building up",
+      detail: "Repeated full tests show an elevated combined-chlorine estimate.",
+      suggestion: "Check recent bather load, shock status, water age, and filter condition." });
+  }
+
+  // Late-cycle instability: out-of-range rate rises past ~60 days.
+  const age = waterAgeDays(state, now);
+  if (age != null && age >= 60) {
+    const cycleTests = tests.filter(t => t.waterCycleId === cid);
+    const early = [], late = [];
+    cycleTests.forEach(t => {
+      const tAge = ageDays(state.maintenance.lastRefillDate, new Date(t.timestamp));
+      const anyOut = ["freeChlorine", "pH", "alkalinity"].some(p => t.data.values && t.data.values[p] != null &&
+        !["green", "blue", "gray"].includes(interpretParam(p, t.data.values[p], targets).status));
+      (tAge >= 60 ? late : early).push(anyOut);
+    });
+    const rate = arr => arr.length ? arr.filter(Boolean).length / arr.length : 0;
+    if (late.length >= 3 && early.length >= 3 && rate(late) > rate(early) + 0.2) {
+      patterns.push({ id: "late_cycle", title: "Water is becoming harder to maintain late in the cycle",
+        detail: "Out-of-range results have increased past 60 days of water age.",
+        suggestion: "Consider whether the next water change should come earlier." });
+    }
+  }
+
+  return patterns;
+}
+
+/* ============================================================
+   6. DOSE CALCULATOR — label data only, never hardcoded doses.
+   ============================================================ */
+function computeDose(product, spaProfile) {
+  if (!product || !product.dosing || !product.dosing.labelDose || !product.dosing.referenceVolume) return null;
+  const d = product.dosing;
+  const scaled = d.labelDose * spaProfile.volumeLitres / d.referenceVolume;
+  return {
+    amount: Math.round(scaled * 10) / 10,
+    unit: d.unit || "g",
+    note: "Scaled from the product label (" + d.labelDose + " " + (d.unit || "g") +
+          " per " + d.referenceVolume + " L) for " + spaProfile.volumeLitres + " L."
+  };
+}
+
+function findChemical(state, roleOrId) {
+  return state.chemicalInventory.find(c => c.id === roleOrId) ||
+         state.chemicalInventory.find(c => c.role === roleOrId);
+}
+
+/* ---------- Maintenance due calculations ---------- */
+function lastEventOf(state, type) {
+  for (let i = state.events.length - 1; i >= 0; i--) if (state.events[i].type === type) return state.events[i];
+  return null;
+}
+
+function maintenanceStatus(state, now) {
+  const iv = state.maintenance.intervals;
+  const item = (type, intervalDays, label) => {
+    const last = lastEventOf(state, type);
+    if (!last) return { type, label, last: null, dueInDays: null, overdue: false };
+    const days = ageDays(last.timestamp, now);
+    return { type, label, last, lastDays: Math.floor(days), dueInDays: Math.ceil(intervalDays - days), overdue: days >= intervalDays };
+  };
+  return {
+    shock: item("shock", iv.shockDays, "Oxidation / shock"),
+    rinse: item("filter_rinse", iv.filterRinseDays, "Filter rinse"),
+    clean: item("filter_clean", iv.filterCleanDays, "Deep filter clean"),
+    replace: item("filter_replace", iv.filterReplaceMonths * 30.4, "Filter replacement"),
+    water: Object.assign({ ageDays: waterAgeDays(state, now), intervalDays: iv.waterChangeDays },
+      waterChangeAdvice(state, now))
+  };
+}
+
+/* ---------- Cloudy water / foam logic (§37) ---------- */
+function cloudyWaterAdvice(state, now) {
+  const fc = latestReading(state, "freeChlorine");
+  const fcStatus = fc ? interpretFC(fc.value, state.targets) : null;
+  if (!fcStatus || fcStatus.blocksUse || fcStatus.status !== "green") {
+    return { first: "Restore sanitizer first.", contributors: [] };
+  }
+  const contributors = [];
+  const sessions = state.events.filter(e => e.type === "swim_session" &&
+    ageDays(e.timestamp, now) <= 3 && isHeavySession(e));
+  if (sessions.length) contributors.push("Recent high bather load");
+  const m = maintenanceStatus(state, now);
+  if (m.shock.overdue || !m.shock.last) contributors.push("Shock due");
+  if (m.rinse.overdue || m.rinse.last == null) contributors.push("Filter due for cleaning");
+  const ph = latestReading(state, "pH");
+  if (ph && interpretPH(ph.value, state.targets).status !== "green") contributors.push("pH out of range");
+  const hd = latestReading(state, "hardness");
+  if (hd && interpretHardness(hd.value, state.targets).status !== "green") contributors.push("Hardness out of range");
+  const age = waterAgeDays(state, now);
+  if (age != null && age >= 60) contributors.push("Water age (" + age + " days)");
+  const cy = latestReading(state, "cya");
+  if (cy && ["caution", "high", "very_high"].includes(interpretCYA(cy.value, state.targets).zone))
+    contributors.push("Elevated CYA");
+  return { first: null, contributors };
+}
+
+const FOAM_ADVICE = {
+  message: "Persistent foam is usually better solved by addressing the cause than repeatedly adding defoamer.",
+  causes: ["High bather load", "Detergent residue on swimwear", "Body products (lotions, sunscreen)", "Dirty filter", "Old water"]
+};
+
+/* ============================================================
+   7. RENDERING, NAVIGATION & EVENT HANDLERS
+   Everything below touches the DOM and only runs in a browser
+   (guarded by the init check at the bottom of the file).
+   ============================================================ */
+
+let state = null;          // persistent app state (localStorage-backed)
+
+const ui = {
+  route: "today",
+  testFlow: null,
+  sessionFlow: null,       // "we used the swim spa" form
+  historyTab: "timeline",
+  trendRange: "cycle",
+  waterChange: null,
+  lastResult: null,
+  editingChem: null
+};
+
+const STATUS_ICON = { green: "✓", amber: "⚠", red: "✕", gray: "?", blue: "ℹ", info: "ℹ" };
+const STATUS_WORD = { green: "In range", amber: "Attention", red: "Issue", gray: "Not tested", blue: "Info" };
+
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function statusBadge(status, label) {
+  const cls = { green: "badge-green", amber: "badge-amber", red: "badge-red", gray: "badge-gray", blue: "badge-blue", info: "badge-blue" }[status] || "badge-gray";
+  return '<span class="badge ' + cls + '">' + STATUS_ICON[status] + " " + esc(label || STATUS_WORD[status]) + "</span>";
+}
+
+function fmtDate(iso, withTime) {
+  const d = new Date(iso);
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  let s = months[d.getMonth()] + " " + d.getDate() + ", " + d.getFullYear();
+  if (withTime) {
+    let h = d.getHours(), ampm = h >= 12 ? "PM" : "AM"; h = h % 12 || 12;
+    s += " · " + h + ":" + String(d.getMinutes()).padStart(2, "0") + " " + ampm;
+  }
+  return s;
+}
+
+function agoStr(iso, now) {
+  const days = Math.floor(ageDays(iso, now));
+  if (days <= 0) return "today";
+  if (days === 1) return "yesterday";
+  return days + " days ago";
+}
+
+/* ---------- Router ---------- */
+function go(route) {
+  ui.route = route;
+  render();
+  window.scrollTo(0, 0);
+}
+
+function render() {
+  const app = document.getElementById("app");
+  let body = "";
+  if (ui.testFlow) body = viewTestFlow();
+  else if (ui.sessionFlow) body = viewSessionFlow();
+  else if (ui.waterChange) body = viewWaterChange();
+  else if (state.startup.active && ui.route === "freshfill") body = viewFreshFill();
+  else {
+    switch (ui.route) {
+      case "today": body = viewToday(); break;
+      case "test": body = viewTestStart(); break;
+      case "maintenance": body = viewMaintenance(); break;
+      case "history": body = viewHistory(); break;
+      case "settings": body = viewSettings(); break;
+      default: body = viewToday();
+    }
+  }
+  app.innerHTML = '<div class="screen">' + body + "</div>" + viewTabBar();
+  bindCharts();
+}
+
+function viewTabBar() {
+  const tabs = [
+    ["today", "🏠", "Today"], ["test", "🧪", "Test Water"], ["maintenance", "🛠", "Maintenance"],
+    ["history", "📈", "History"], ["settings", "⚙️", "Settings"]
+  ];
+  return '<nav class="tabbar">' + tabs.map(t =>
+    '<button data-act="nav" data-arg="' + t[0] + '" class="' + (ui.route === t[0] ? "sel" : "") + '">' +
+    '<span class="t-ico">' + t[1] + "</span>" + t[2] + "</button>").join("") + "</nav>";
+}
+
+/* ============================================================
+   TODAY DASHBOARD
+   ============================================================ */
+function viewToday() {
+  const now = new Date();
+  const st = overallStatus(state, now);
+  const bannerCls = { green: "banner-green", amber: "banner-amber", red: "banner-red", gray: "banner-gray", blue: "banner-blue" }[st.color];
+  const mode = MODES[state.operatingMode];
+  let html = '<h1 class="screen-title">' + esc(state.settings.spaName) + "</h1>" +
+    '<p class="subtitle">' + esc(mode.label) + " · " + currentModeTemp(state) + "°F · Ozone " +
+    (state.ozone.enabled ? "on" : "off") + "</p>";
+
+  if (state.startup.active) {
+    html += '<div class="banner banner-blue"><div class="b-title">ℹ Fresh-fill setup in progress</div>' +
+      '<div class="b-why">Step: ' + esc(STARTUP_STEP_LABELS[state.startup.state] || "") + "</div></div>" +
+      '<button class="btn btn-primary" data-act="nav" data-arg="freshfill">CONTINUE FRESH-FILL SETUP</button>';
+  }
+
+  html += '<div class="banner ' + bannerCls + '"><div class="b-title">' + STATUS_ICON[st.color] + " " + esc(st.title) +
+    '</div><div class="b-why">' + esc(st.why) + "</div></div>";
+
+  // Six chemistry cards.
+  html += '<div class="card-grid">' + DASH_ORDER.map(p => chemCard(p, now)).join("") + "</div>";
+
+  // Combined-chlorine line under the cards when computable.
+  const fcR = latestReading(state, "freeChlorine"), tcR = latestReading(state, "totalChlorine");
+  if (fcR && tcR && fcR.test.id === tcR.test.id) {
+    const cc = combinedChlorine(fcR.value, tcR.value);
+    if (cc != null) {
+      html += '<p class="muted" style="margin:-6px 0 12px">Estimated combined chlorine: <b>~' + cc +
+        " ppm</b> (coarse strip estimate)</p>";
+    }
+  }
+
+  html += actionCard(now);
+
+  html += '<button class="btn btn-primary" data-act="nav" data-arg="test">TEST WATER</button>' +
+    '<button class="btn" data-act="canuse">CAN WE USE IT?</button>' +
+    '<button class="btn" data-act="session-start">WE USED THE SWIM SPA</button>' +
+    (state.startup.active ? "" : '<button class="btn" data-act="freshfill-start">FRESH FILL / WATER CHANGE</button>');
+
+  html += maintenanceSnapshot(now);
+  return html;
+}
+
+function chemCard(param, now) {
+  const r = latestReading(state, param);
+  const info = r ? interpretParam(param, r.value, state.targets) : { status: "gray", label: "Not tested" };
+  const trend = paramTrend(state, param);
+  const trendTxt = { rising: "↑ rising", falling: "↓ falling", stable: "→ stable", insufficient: "" }[trend];
+  const t = state.targets[param];
+  let targetTxt = "";
+  if (param === "cya") targetTxt = "Prefer " + t.preferredMin + "–" + t.preferredMax + " ppm";
+  else if (param === "totalChlorine") targetTxt = "For combined-Cl estimate";
+  else if (t) targetTxt = "Target " + (param === "hardness" ? "~" : "") + t.min + "–" + t.max + (param === "pH" ? "" : " ppm");
+  const fresh = paramFreshness(state, param, now);
+  return '<div class="card s-' + info.status + '">' +
+    '<div class="stat-label">' + PARAM_LABELS[param] + "</div>" +
+    '<div class="stat-value">' + (r ? formatValue(param, r.value) : "—") + "</div>" +
+    '<div class="stat-sub">' + targetTxt + "</div>" +
+    '<div class="stat-sub">' + (r ? "Tested " + agoStr(r.test.timestamp, now) + (fresh.stale ? " · retest due" : "") : "No reading") + "</div>" +
+    (trendTxt ? '<div class="stat-sub">' + trendTxt + "</div>" : "") +
+    '<div class="stat-status s-' + info.status + '"><span class="sdot"></span>' + esc(info.label) + "</div></div>";
+}
+
+function actionCard(now) {
+  const values = {};
+  DASH_ORDER.forEach(p => { const r = latestReading(state, p); if (r) values[p] = r.value; });
+  const actions = diagnose(values, state.targets);
+  const m = maintenanceStatus(state, now);
+  let html = '<div class="card"><h3>What should I do?</h3>';
+  if (actions.length > 0) {
+    const a = actions[0];
+    const r = a.parameter !== "combined" ? latestReading(state, a.parameter) : null;
+    html += '<div class="tl-title">Do this first: ' + esc(a.title) + "</div>" +
+      '<div class="tl-detail">' + esc(a.message || "") + "</div>" +
+      (r ? '<div class="stat-sub" style="margin-top:6px">Current: ' + formatValue(a.parameter, r.value) + "</div>" : "") +
+      whyBlock(a.parameter);
+    if (!a.retestOnly && !a.doNotAdd && ["alkalinity", "pH", "hardness", "freeChlorine"].includes(a.parameter)) {
+      html += '<button class="btn" style="margin-top:10px" data-act="chem-action" data-arg="' + a.parameter + '">VIEW ACTION</button>';
+    }
+    if (a.parameter !== "combined" && a.parameter !== "cya") {
+      html += '<button class="btn-quiet" data-act="retest" data-arg="' + a.parameter + '">Retest ' + PARAM_LABELS[a.parameter] + "</button>";
+    }
+    // Info-severity notes (combined chlorine, CYA) ride alongside.
+    const extras = actions.slice(1).filter(x => x.severity === "info" || x.parameter === "cya");
+    extras.forEach(x => {
+      html += '<div class="tl-detail" style="margin-top:8px">' + STATUS_ICON[x.severity === "red" ? "red" : x.severity === "amber" ? "amber" : "blue"] +
+        " <b>" + esc(x.title) + ":</b> " + esc(x.message || "") + "</div>";
+    });
+  } else {
+    const fcFresh = paramFreshness(state, "freeChlorine", now);
+    const fullDue = !waterTests(state).some(t => t.data.testType === "full" && ageDays(t.timestamp, now) <= state.maintenance.intervals.fullTestDays);
+    if (!fcFresh.tested || fcFresh.stale) html += '<div class="tl-detail">Run a water test — the sanitizer reading is not current.</div>';
+    else if (fullDue) html += '<div class="tl-detail">Weekly full water test is due (includes CYA — it drives refill timing).</div>';
+    else if (m.water.level === "due" || m.water.level === "strong") html += '<div class="tl-detail">' + esc(m.water.message) + "</div>";
+    else if (m.shock.overdue || !m.shock.last) html += '<div class="tl-detail">Weekly shock/oxidation is due.</div>';
+    else if (m.rinse.overdue) html += '<div class="tl-detail">Filter rinse is due.</div>';
+    else if (m.water.level === "plan") html += '<div class="tl-detail">' + esc(m.water.message) + "</div>";
+    else html += '<div class="tl-detail">Nothing urgent. Next: quick test in ' +
+      Math.max(0, Math.ceil(state.maintenance.intervals.quickTestDays - (fcFresh.days || 0))) + " day(s).</div>";
+  }
+  return html + "</div>";
+}
+
+function whyBlock(param) {
+  const why = {
+    alkalinity: "Alkalinity helps stabilize pH. If alkalinity is out of range, pH can be difficult to control.",
+    pH: "Proper pH protects bathers, equipment, and sanitizer effectiveness.",
+    freeChlorine: "Free chlorine is the sanitizer residual keeping the water sanitary. Ozone helps, but never replaces a measurable residual.",
+    hardness: "Adequate calcium hardness protects the shell and equipment from corrosive water.",
+    cya: "Stabilizer (CYA) protects chlorine but accumulates with every stabilized dose — it only leaves with the water. Rising CYA is the main reason this spa is drained every 3–4 months.",
+    combined: "Combined chlorine is spent sanitizer bound to contaminants; shock oxidizes it away."
+  }[param];
+  return why ? '<details class="why"><summary>Why am I doing this?</summary><p>' + esc(why) + "</p></details>" : "";
+}
+
+function maintenanceSnapshot(now) {
+  const m = maintenanceStatus(state, now);
+  let html = '<div class="card"><h3>Maintenance</h3>';
+  html += '<div class="result-row"><span>Water age</span><span>' +
+    (m.water.ageDays == null ? '<span class="muted">no refill recorded</span>' :
+      "<b>" + m.water.ageDays + " / ~" + m.water.intervalDays + " days</b>") + "</span></div>";
+  if (m.water.level !== "none") html += '<div class="tl-detail">' + esc(m.water.message) + "</div>";
+  html += '<div class="result-row"><span>Shock</span><span>' +
+    (m.shock.last ? agoStr(m.shock.last.timestamp, now) + (m.shock.overdue ? " · " + statusBadge("amber", "due") : "") : statusBadge("gray", "never")) + "</span></div>";
+  html += '<div class="result-row"><span>Filter rinse</span><span>' +
+    (m.rinse.last ? agoStr(m.rinse.last.timestamp, now) + (m.rinse.overdue ? " · " + statusBadge("amber", "due") : "") : statusBadge("gray", "never")) + "</span></div>";
+  const lastTest = waterTests(state).pop();
+  html += '<div class="result-row"><span>Last test</span><span>' +
+    (lastTest ? fmtDate(lastTest.timestamp, true) : statusBadge("gray", "never")) + "</span></div>";
+  return html + '<button class="btn-quiet" data-act="nav" data-arg="maintenance">Open maintenance →</button></div>';
+}
+
+/* ============================================================
+   TEST WATER — guided EasyTest workflow
+   ============================================================ */
+function viewTestStart() {
+  return '<h1 class="screen-title">Test water</h1>' +
+    '<div class="card"><h3>Quick check</h3><p class="tl-detail">Free chlorine + pH. Routine checks, and before planned use.</p>' +
+    '<button class="btn btn-primary" style="margin-top:10px" data-act="test-begin" data-arg="quick">START QUICK CHECK</button></div>' +
+    '<div class="card"><h3>Full test</h3><p class="tl-detail">Hardness + free & total chlorine + CYA + alkalinity + pH. Weekly — CYA drives refill timing.</p>' +
+    '<button class="btn" style="margin-top:10px" data-act="test-begin" data-arg="full">START FULL TEST</button></div>' +
+    '<div class="card"><h3>Fresh fill test</h3><p class="tl-detail">Testing new fill water? Use the guided fresh-fill setup instead.</p>' +
+    '<button class="btn" style="margin-top:10px" data-act="freshfill-start">START FRESH-FILL SETUP</button></div>' +
+    '<p class="muted">EasyTest 7-in-1 procedure: immerse 1 second, do not shake, hold horizontally 15 seconds, compare in natural light. The bromine pad is ignored — this spa uses chlorine.</p>';
+}
+
+function startTest(mode, retestParam, context, onSave) {
+  const kit = TEST_KITS[state.testKit];
+  let params;
+  if (mode === "retest") params = [retestParam];
+  else if (mode === "quick") params = ["freeChlorine", "pH"];
+  else params = kit.padOrder.slice();
+  ui.testFlow = {
+    mode, params, kit, step: "prepare", secondsLeft: kit.readDelaySeconds,
+    values: {}, between: {}, context: context || "normal", observations: {},
+    onSave: onSave || null
+  };
+  render();
+}
+
+function viewTestFlow() {
+  const f = ui.testFlow;
+  const title = f.mode === "retest" ? "Retest " + PARAM_LABELS[f.params[0]] :
+    f.mode === "quick" ? "Quick check" : "Full test";
+  let html = '<h1 class="screen-title">' + title + "</h1>";
+  if (f.step === "prepare") {
+    html += '<div class="card"><div class="tl-title">Test your water</div>' +
+      '<p class="tl-detail" style="margin-top:6px">Grab one EasyTest strip.</p></div>' +
+      '<button class="btn btn-primary" data-act="test-step" data-arg="dip">I’M READY</button>' +
+      '<button class="btn-quiet" data-act="test-cancel">Cancel</button>';
+  } else if (f.step === "dip") {
+    html += '<div class="card"><div class="tl-title">Immerse the strip for 1 second and remove.</div>' +
+      '<p class="tl-detail" style="margin-top:6px">Do not shake excess water off.</p></div>' +
+      '<button class="btn btn-primary" data-act="test-step" data-arg="timer">I DIPPED IT</button>' +
+      '<button class="btn-quiet" data-act="test-cancel">Cancel</button>';
+  } else if (f.step === "timer") {
+    const done = f.secondsLeft <= 0;
+    html += '<div class="timer-wrap">' +
+      '<div class="timer-label">' + (done ? "Match your strip now" : "Hold strip horizontally") + "</div>" +
+      '<div class="timer-num">' + (done ? "✓" : "00:" + String(f.secondsLeft).padStart(2, "0")) + "</div>" +
+      '<div class="timer-warn">' + (done ? "Compare immediately in natural light." : "Do not shake excess water off.") + "</div></div>" +
+      (done ? '<button class="btn btn-primary" data-act="test-step" data-arg="entry">READ THE STRIP</button>' :
+        '<button class="btn" disabled>Reading in ' + f.secondsLeft + "s…</button>");
+  } else if (f.step === "entry") {
+    html += '<p class="subtitle">Match your strip to the bottle chart. Numbers are what count — colors are just a hint.</p>';
+    f.params.forEach(p => { html += entryTiles(p); });
+    if (f.mode !== "retest") html += contextPicker() + observationsPicker();
+    const complete = f.params.every(p => f.values[p] != null);
+    html += '<p class="muted">Recorded with mode ' + esc(MODES[state.operatingMode].label) + " · " +
+      currentModeTemp(state) + "°F</p>" +
+      '<button class="btn btn-primary" ' + (complete ? "" : "disabled ") + 'data-act="test-save">SAVE TEST</button>' +
+      '<button class="btn-quiet" data-act="test-cancel">Cancel</button>';
+  }
+  return html;
+}
+
+// A kit bucket can be a plain number or a native range object (the CYA
+// 30–50 pad). Never parseFloat a range bucket — that would fabricate an
+// exact value the strip cannot provide.
+function bucketInterval(b) {
+  return typeof b === "number" ? { lo: b, hi: b } : { lo: b.lower, hi: b.upper };
+}
+function bucketLabel(b) {
+  return typeof b === "number" ? String(b) : b.label;
+}
+
+function entryTiles(param) {
+  const f = ui.testFlow;
+  const def = f.kit.parameters[param];
+  const vals = def.values;
+  const between = f.between[param];
+  const cur = f.values[param];
+  let html = '<div class="card"><h3>' + esc(def.label) + (def.unit ? " (" + def.unit + ")" : "") + "</h3>" +
+    '<div class="tile-group">';
+  vals.forEach((b, i) => {
+    const biv = bucketInterval(b);
+    let cls = "tile";
+    if (between) {
+      if (cur && cur.approximate && biv.lo >= cur.lower && biv.hi <= cur.upper) cls += " sel";
+      else if (f._betweenFirst && f._betweenFirst.param === param) {
+        if (i === f._betweenFirst.idx) cls += " sel";
+        else if (Math.abs(i - f._betweenFirst.idx) !== 1) cls += " dim";
+      }
+    } else if (cur && !f.between[param]) {
+      const civ = asInterval(cur);
+      if (civ && civ.lo === biv.lo && civ.hi === biv.hi) cls += " sel";
+    }
+    const pad = (PAD_COLORS[param] || {})[typeof b === "number" ? b : "30-50"];
+    html += '<button class="' + cls + '" data-act="tile" data-param="' + param + '" data-idx="' + i + '">' + bucketLabel(b) +
+      (pad ? '<span class="tile-swatch" style="background:' + pad + '"></span>' : "") + "</button>";
+  });
+  html += "</div>" +
+    '<button class="btn-quiet" data-act="between" data-param="' + param + '">' +
+    (between ? "✓ Between two colors — tap the two adjacent values" : "Looks between two colors") + "</button>";
+  if (cur) html += '<div class="stat-sub">Selected: <b>' + formatValue(param, cur) + "</b></div>";
+  return html + "</div>";
+}
+
+function contextPicker() {
+  const f = ui.testFlow;
+  const opts = [["normal", "Normal / no recent use"], ["before_use", "Before use"], ["after_use", "After use"],
+    ["after_chemicals", "After chemicals"], ["fresh_fill", "Fresh fill"]];
+  return '<div class="card"><h3>Test context</h3><div class="seg">' + opts.map(o =>
+    '<button data-act="ctx" data-arg="' + o[0] + '" class="' + (f.context === o[0] ? "sel" : "") + '">' + o[1] + "</button>").join("") + "</div></div>";
+}
+
+function observationsPicker() {
+  const f = ui.testFlow;
+  const groups = [
+    ["appearance", "Water appearance", ["clear", "slightly cloudy", "cloudy", "very cloudy"]],
+    ["foam", "Foam", ["none", "minor", "persistent"]],
+    ["odor", "Odor", ["normal", "strong chlorine-like smell", "musty/unusual"]],
+    ["surface", "Surface", ["normal", "slippery", "scale visible"]]
+  ];
+  return '<details class="why" style="margin-bottom:12px"><summary>Optional observations</summary>' +
+    groups.map(g => '<div class="card" style="margin-top:8px"><h3>' + g[1] + '</h3><div class="seg">' +
+      g[2].map(o => '<button data-act="obs" data-group="' + g[0] + '" data-arg="' + o + '" class="' +
+        (f.observations[g[0]] === o ? "sel" : "") + '">' + o + "</button>").join("") + "</div></div>").join("") + "</details>";
+}
+
+function startTimer() {
+  const f = ui.testFlow;
+  f.secondsLeft = f.kit.readDelaySeconds;
+  f.step = "timer";
+  render();
+  const tick = setInterval(() => {
+    if (!ui.testFlow || ui.testFlow.step !== "timer") { clearInterval(tick); return; }
+    ui.testFlow.secondsLeft -= 1;
+    if (ui.testFlow.secondsLeft <= 0) {
+      clearInterval(tick);
+      ui.testFlow.secondsLeft = 0;
+      try { if (navigator.vibrate) navigator.vibrate(200); } catch (e) { /* ignore */ }
+    }
+    render();
+  }, 1000);
+}
+
+function saveTestFlow() {
+  const f = ui.testFlow;
+  const now = new Date();
+  const values = {};
+  f.params.forEach(p => {
+    const v = f.values[p];
+    if (v == null) return;
+    if (v.approximate && v.lower != null) values[p] = { lower: v.lower, upper: v.upper, approximate: true };
+    else values[p] = { value: v.value, approximate: p === "hardness" };
+  });
+  const data = {
+    testType: f.mode === "retest" ? "retest" : f.mode,
+    context: f.context,
+    testKit: f.kit.id,
+    precision: "discrete-strip",
+    operatingMode: state.operatingMode,
+    waterTemperatureF: currentModeTemp(state),
+    values: values
+  };
+  if (Object.keys(f.observations).length) data.observations = f.observations;
+  const ev = addEvent(state, "water_test", data, "", now);
+  saveState(state);
+  const cb = f.onSave;
+  ui.testFlow = null;
+  ui.lastResult = ev;
+  if (cb) { cb(ev); return; }
+  ui.route = "result";
+  renderResult(ev);
+}
+
+function renderResult(ev) {
+  const values = ev.data.values;
+  const actions = diagnose(values, state.targets, ev.data.context);
+  let rows = "";
+  DASH_ORDER.forEach(p => {
+    if (values[p] == null) return;
+    const info = interpretParam(p, values[p], state.targets);
+    rows += '<div class="result-row"><span>' + PARAM_LABELS[p] + "</span><span><b>" + formatValue(p, values[p]) + "</b> " +
+      statusBadge(info.status, info.label) + "</span></div>";
+  });
+  const cc = combinedChlorine(values.freeChlorine, values.totalChlorine);
+  if (cc != null) {
+    rows += '<div class="result-row"><span>Est. combined chlorine</span><span><b>~' + cc + " ppm</b> " +
+      statusBadge(cc >= 2 ? "amber" : "green", cc >= 2 ? "Elevated" : "OK") + "</span></div>";
+  }
+  let html = '<h1 class="screen-title">Test complete</h1><div class="card">' + rows + "</div>";
+  if (ev.data.context === "after_use" && values.freeChlorine && interpretFC(values.freeChlorine, state.targets).blocksUse) {
+    html += '<div class="card"><div class="tl-detail">This reading was taken after use — a sanitizer dip after a busy session is expected demand. Restore chlorine, but one post-use low reading doesn\'t mean the normal sanitizer strategy is inadequate.</div></div>';
+  }
+  if (actions.length > 0) {
+    const a = actions[0];
+    html += '<div class="card"><h3>Do this first</h3><div class="tl-title">' + esc(a.title) + "</div>" +
+      '<div class="tl-detail">' + esc(a.message || "") + "</div>" + whyBlock(a.parameter);
+    if (!a.retestOnly && !a.doNotAdd && ["alkalinity", "pH", "hardness", "freeChlorine"].includes(a.parameter))
+      html += '<button class="btn btn-primary" style="margin-top:10px" data-act="chem-action" data-arg="' + a.parameter + '">VIEW ACTION</button>';
+    if (a.parameter !== "combined" && a.parameter !== "cya")
+      html += '<button class="btn-quiet" data-act="retest" data-arg="' + a.parameter + '">RETEST ' + PARAM_LABELS[a.parameter].toUpperCase() + "</button>";
+    // Surface additional notes (e.g. combined chlorine alongside a blocking FC).
+    actions.slice(1).forEach(x => {
+      html += '<div class="tl-detail" style="margin-top:8px">' + STATUS_ICON[x.severity === "red" ? "red" : x.severity === "amber" ? "amber" : "blue"] +
+        " <b>" + esc(x.title) + ":</b> " + esc(x.message || "") + "</div>";
+    });
+    html += "</div>";
+  } else {
+    html += '<div class="banner banner-green"><div class="b-title">✓ All readings look good</div></div>';
+  }
+  html += '<button class="btn" data-act="nav" data-arg="today">DONE</button>';
+  document.getElementById("app").innerHTML = '<div class="screen">' + html + "</div>" + viewTabBar();
+}
+
+/* ============================================================
+   CHEMICAL ACTION SCREEN
+   ============================================================ */
+function viewChemAction(param) {
+  const r = latestReading(state, param);
+  const t = state.targets[param];
+  const rs = r && t && t.min != null ? rangeStatus(r.value, t.min, t.max) : "unknown";
+  // High alkalinity must never surface the increaser (§24): it is
+  // lowered gradually per the configured procedure, not dosed up.
+  const alkHigh = param === "alkalinity" && rs === "high";
+  const roleNeeded = param === "alkalinity" ? (alkHigh ? null : "alkalinity increaser") :
+    param === "pH" ? (rs === "low" ? "pH increaser" : "pH decreaser") :
+    param === "hardness" ? "hardness increaser" : "routine sanitizer";
+  const product = roleNeeded ? findChemical(state, roleNeeded) : null;
+  const dose = product ? computeDose(product, state.spaProfile) : null;
+  const vol = state.spaProfile.volumeLitres.toLocaleString() + " L / " + state.spaProfile.volumeGallons + " US gallons";
+  let html = '<h1 class="screen-title">Correct ' + PARAM_LABELS[param].toLowerCase() + "</h1>" +
+    '<div class="card">' +
+    '<div class="result-row"><span>Current</span><b>' + (r ? formatValue(param, r.value) : "—") + "</b></div>" +
+    (t && t.min != null ? '<div class="result-row"><span>Target</span><b>' + t.min + "–" + t.max + (param === "pH" ? "" : " ppm") + "</b></div>" : "") +
+    '<div class="result-row"><span>Product</span><b>' + (alkHigh ? "— (lowering procedure)" : product ? esc(product.name) : "Not configured") + "</b></div>" +
+    '<div class="result-row"><span>Dose</span><span>' + (alkHigh ?
+      "Alkalinity is high — <b>do not add alkalinity increaser</b>. Lower it gradually per your configured procedure: small adjustments, circulate, retest between each." :
+      dose ? "<b>" + dose.amount + " " + esc(dose.unit) + "</b><br><span class='muted'>" + esc(dose.note) + "</span>" :
+      "Follow the product label for approximately <b>" + vol + "</b>.") + "</span></div></div>";
+  if (param === "freeChlorine") {
+    html += '<div class="card"><div class="tl-detail">Aqua Granular is stabilized chlorine — every dose also adds CYA. That\'s normal, and it\'s why CYA is tracked on every full test.</div></div>';
+  }
+  html += '<div class="card"><h3>Then</h3><ol style="padding-left:20px;font-size:14px">' +
+    "<li>Circulate the water according to the product label.</li>" +
+    "<li>Wait the label’s recommended time.</li>" +
+    "<li>Retest " + PARAM_LABELS[param].toLowerCase() + ".</li>" +
+    (param === "alkalinity" ? "<li>Only then evaluate pH.</li>" : "") + "</ol>" + whyBlock(param) + "</div>";
+  html += '<div class="safety">Never premix spa chemicals or combine concentrated chemicals together. Add products separately and follow the product label. Keep chemicals secured away from children — chemical handling is an adult task.</div>' +
+    '<div class="spacer"></div>' +
+    '<button class="btn btn-primary" data-act="chem-added" data-param="' + param + '" data-product="' + (product ? product.id : "") + '">I ADDED IT</button>' +
+    '<button class="btn" data-act="retest" data-arg="' + param + '">RETEST</button>' +
+    '<button class="btn-quiet" data-act="nav" data-arg="today">CANCEL</button>';
+  document.getElementById("app").innerHTML = '<div class="screen">' + html + "</div>" + viewTabBar();
+}
+
+/* ============================================================
+   "WE USED THE SWIM SPA" — session logging
+   ============================================================ */
+function viewSessionFlow() {
+  const s = ui.sessionFlow;
+  const bathers = [1, 2, 3, 4, 5, 6, "7+"];
+  const types = ["Active swimming", "Kids playing", "Soaking", "Mixed use"];
+  const durations = ["<15 min", "15–30 min", "30–60 min", "60+ min"];
+  return '<h1 class="screen-title">We used the swim spa</h1>' +
+    '<div class="card"><h3>Number of bathers</h3><div class="seg">' +
+    bathers.map(b => '<button data-act="sess-bathers" data-arg="' + b + '" class="' + (String(s.bathers) === String(b) ? "sel" : "") + '">' + b + "</button>").join("") + "</div></div>" +
+    '<div class="card"><h3>Session type</h3><div class="seg">' +
+    types.map(t => '<button data-act="sess-type" data-arg="' + esc(t) + '" class="' + (s.sessionType === t ? "sel" : "") + '">' + t + "</button>").join("") + "</div></div>" +
+    '<div class="card"><h3>Duration</h3><div class="seg">' +
+    durations.map(d => '<button data-act="sess-dur" data-arg="' + esc(d) + '" class="' + (s.duration === d ? "sel" : "") + '">' + d + "</button>").join("") + "</div></div>" +
+    '<div class="card"><h3>Water temperature (°F)</h3>' +
+    '<div class="field"><input type="number" id="sess-temp" value="' + s.temp + '"></div>' +
+    '<p class="muted">Default from ' + esc(MODES[state.operatingMode].label) + " mode.</p></div>" +
+    '<button class="btn btn-primary" data-act="sess-save">SAVE</button>' +
+    '<button class="btn-quiet" data-act="sess-cancel">Cancel</button>';
+}
+
+function saveSession() {
+  const s = ui.sessionFlow;
+  const now = new Date();
+  const tempEl = document.getElementById("sess-temp");
+  const temp = tempEl && !isNaN(parseFloat(tempEl.value)) ? parseFloat(tempEl.value) : s.temp;
+  const ev = addEvent(state, "swim_session", {
+    bathers: s.bathers === "7+" ? 7 : Number(s.bathers), bathersLabel: String(s.bathers),
+    sessionType: s.sessionType, duration: s.duration,
+    waterTemperatureF: temp, operatingMode: state.operatingMode
+  }, "", now);
+  saveState(state);
+  const m = maintenanceStatus(state, now);
+  const cls = loadClass(ev);
+  ui.sessionFlow = null;
+  let html = '<h1 class="screen-title">Session logged</h1>';
+  if (cls === "high") {
+    html += '<div class="banner banner-amber"><div class="b-title">⚠ High bather load</div><div class="b-why">' +
+      esc(s.bathers) + " bathers in " + state.spaProfile.volumeGallons.toLocaleString() +
+      " gallons is a big sanitizer demand. Watch the next 12–24h chlorine reading — one post-play low result is expected demand, not a failing strategy.</div></div>";
+  } else if (cls === "moderate") {
+    html += '<div class="banner banner-blue"><div class="b-title">ℹ Moderate bather load</div></div>';
+  }
+  html += '<div class="card"><h3>Recommended</h3><div class="tl-detail">Check free chlorine after use or as part of your normal post-use routine.</div></div>';
+  html += '<div class="card"><h3>Oxidation / shock</h3><div class="tl-detail">' +
+    (m.shock.last ? "Last completed " + agoStr(m.shock.last.timestamp, now) + (m.shock.overdue ? " — due now." :
+      m.shock.dueInDays <= 1 ? " — due tomorrow." : " — due in " + m.shock.dueInDays + " days.") : "No shock recorded yet.") +
+    (cls !== "normal" ? " Heavy use is a good time to shock." : "") + "</div>" +
+    '<button class="btn" style="margin-top:10px" data-act="shock-done">SHOCK COMPLETED</button></div>';
+  html += '<button class="btn btn-primary" data-act="retest-quick">QUICK TEST NOW</button>' +
+    '<button class="btn" data-act="nav" data-arg="today">DONE</button>';
+  document.getElementById("app").innerHTML = '<div class="screen">' + html + "</div>" + viewTabBar();
+}
+
+/* ============================================================
+   4/7. FRESH FILL WIZARD — state machine lives in state.startup and
+   persists on every transition so reopening resumes exactly here.
+   ============================================================ */
+function setStartupState(s) {
+  state.startup.state = s;
+  // "complete" keeps the wizard active so the completion screen renders;
+  // only ffFinish() (START NORMAL MAINTENANCE) deactivates the wizard
+  // and records the startup_complete event.
+  state.startup.active = s != null;
+  saveState(state);
+}
+
+// True while the wizard still has balance work to do. The "complete"
+// state shows a summary screen but no longer restricts spa use.
+function startupInProgress(state) {
+  return state.startup.active && state.startup.state !== "complete";
+}
+
+function freshFillProgress() {
+  const steps = STARTUP_STATES.slice(0, 8); // exclude "complete"
+  const curIdx = STARTUP_STATES.indexOf(state.startup.state);
+  const doneCount = Math.min(curIdx, 8);
+  let html = '<div class="prog-bar"><div class="prog-fill" style="width:' + Math.round(100 * doneCount / 8) + '%"></div></div>' +
+    '<div class="muted">' + doneCount + ' of 8 steps</div><ul class="prog-steps">';
+  steps.forEach((s, i) => {
+    const cls = i < curIdx ? "done" : i === curIdx ? "current" : "";
+    const mark = i < curIdx ? "✓" : i === curIdx ? "●" : "○";
+    html += '<li class="' + cls + '"><span class="p-mark">' + mark + "</span>" + STARTUP_STEP_LABELS[s] + "</li>";
+  });
+  return html + "</ul>";
+}
+
+function viewFreshFill() {
+  const s = state.startup.state;
+  let html = '<h1 class="screen-title">Fresh water setup</h1>' +
+    '<div class="card">' + freshFillProgress() + "</div>";
+  const now = new Date();
+
+  if (s === "refill") {
+    html += '<div class="card"><div class="tl-title">Refill the ' + esc(state.settings.spaName) + "</div>" +
+      '<p class="tl-detail" style="margin:8px 0">Fill the swim spa to its normal operating level with municipal water.</p>' +
+      '<ul class="prog-steps">' +
+      ["Spa filled", "Filters installed", "Pumps/circulation running", "Ozone system on (if normally enabled)", "No balancing chemicals added yet"]
+        .map(c => '<li><span class="p-mark">○</span>' + c + "</li>").join("") + "</ul></div>" +
+      '<button class="btn btn-primary" data-act="ff-circulating">WATER IS CIRCULATING</button>';
+  } else if (s === "initial_test") {
+    html += '<div class="card"><div class="tl-title">Before adding anything, test the untreated fill water.</div>' +
+      '<p class="tl-detail" style="margin-top:8px">Full EasyTest: immerse 1 second, hold horizontally 15 seconds, then read hardness, chlorine, CYA, alkalinity and pH.</p></div>' +
+      '<button class="btn btn-primary" data-act="ff-initial-test">START INITIAL TEST</button>';
+  } else if (s === "alkalinity" || s === "ph" || s === "hardness" || s === "chlorine") {
+    html += freshFillBalanceStep(s, now);
+  } else if (s === "cya_baseline") {
+    const r = latestReading(state, "cya");
+    const inCycle = r && r.test.waterCycleId === currentCycleId(state);
+    html += '<div class="card"><h3>Current task</h3><div class="tl-title">Record the fresh-fill CYA baseline</div>' +
+      '<p class="tl-detail" style="margin:8px 0">Stabilized chlorine will raise CYA over this water cycle. Recording where it starts makes the accumulation visible in Trends and drives refill planning.</p>' +
+      (inCycle ? '<div class="result-row"><span>Baseline CYA</span><b>' + formatValue("cya", r.value) + "</b></div>" +
+        (asInterval(r.value).lo >= state.targets.cya.caution ?
+          '<div class="tl-detail">⚠ Fill water CYA is already elevated — expect a shorter cycle.</div>' : "") :
+        '<div class="tl-detail">No CYA reading for this cycle yet.</div>') +
+      "</div>" +
+      (inCycle ? '<button class="btn btn-primary" data-act="ff-advance" data-arg="final_test">CONTINUE</button>' : "") +
+      '<button class="btn' + (inCycle ? "" : " btn-primary") + '" data-act="ff-retest" data-param="cya">' +
+      (inCycle ? "RETEST CYA" : "TEST CYA") + "</button>";
+  } else if (s === "final_test") {
+    html += '<div class="card"><div class="tl-title">Final water check</div>' +
+      '<p class="tl-detail" style="margin-top:8px">Run one more full test to verify everything at once.</p>' +
+      finalCheckTable() + "</div>" +
+      '<button class="btn btn-primary" data-act="ff-final-test">RUN FINAL FULL TEST</button>';
+  } else if (s === "complete") {
+    html += '<div class="banner banner-green"><div class="b-title">✓ Water setup complete</div>' +
+      '<div class="b-why">A new ~' + state.maintenance.intervals.waterChangeDays + '-day water cycle begins. Normal maintenance: quick tests routinely, full test weekly (CYA included), shock weekly.</div></div>' +
+      '<button class="btn btn-primary" data-act="ff-finish">START NORMAL MAINTENANCE</button>';
+  }
+  html += '<button class="btn-quiet" data-act="nav" data-arg="today">Back to Today</button>';
+  return html;
+}
+
+// One balance step: evaluate latest reading → good/continue or correct/retest.
+function freshFillBalanceStep(step, now) {
+  const param = step === "ph" ? "pH" : step === "chlorine" ? "freeChlorine" : step;
+  const t = state.targets[param];
+  const r = latestReading(state, param);
+  const rs = r && t && t.min != null ? rangeStatus(r.value, t.min, t.max) : "unknown";
+  const label = PARAM_LABELS[param];
+  let html = '<div class="card"><h3>Current task</h3>';
+
+  if (step === "chlorine") {
+    const fc = r ? interpretFC(r.value, state.targets) : null;
+    // Overshot during establishment: never advise adding more (Rule 4/5).
+    const ivHigh = r ? asInterval(r.value) : null;
+    if (ivHigh && ivHigh.lo >= 10) {
+      html += '<div class="tl-title">Free chlorine is high (' + formatValue("freeChlorine", r.value) + ")</div>" +
+        '<p class="tl-detail" style="margin:8px 0"><b>Do not add more sanitizer.</b> Circulate, allow the level to fall, and retest before continuing.</p></div>' +
+        '<button class="btn btn-primary" data-act="ff-retest" data-param="freeChlorine">RETEST FREE CHLORINE</button>';
+      return html;
+    }
+    if (fc && fc.status === "green") {
+      html += '<div class="banner banner-green" style="margin:0"><div class="b-title">✓ Chlorine established</div>' +
+        '<div class="b-why">Free chlorine: ' + formatValue("freeChlorine", r.value) + '. Ozone assists from here, but keep a measurable residual.</div></div></div>' +
+        '<button class="btn btn-primary" data-act="ff-advance" data-arg="cya_baseline">CONTINUE</button>';
+      return html;
+    }
+    html += '<div class="tl-title">Establish free chlorine</div>' +
+      '<p class="tl-detail" style="margin:8px 0">Target 3–5 ppm using <b>Aqua Granular</b> (stabilized chlorine). Ozone should be running if normally enabled — it reduces demand but never replaces the residual.</p>' +
+      doseLine("routine sanitizer") +
+      '<div class="safety">Never premix spa chemicals. Add products separately and follow the product label.</div></div>' +
+      '<button class="btn" data-act="ff-added" data-param="freeChlorine" data-product="aqua_granular">I ADDED CHLORINE</button>' +
+      '<button class="btn btn-primary" data-act="ff-retest" data-param="freeChlorine">RETEST FREE CHLORINE</button>';
+    return html;
+  }
+
+  if (rs === "in" || (step === "hardness" && r && interpretHardness(r.value, state.targets).status === "green")) {
+    html += '<div class="banner banner-green" style="margin:0"><div class="b-title">✓ ' + label + " looks good</div>" +
+      '<div class="b-why">' + label + ": " + formatValue(param, r.value) +
+      (param === "pH" ? ". No pH chemical required." : "") + "</div></div></div>" +
+      '<button class="btn btn-primary" data-act="ff-advance" data-arg="' + nextStartupState(step) + '">CONTINUE</button>';
+    return html;
+  }
+
+  const dir = rs === "low" ? "low" : rs === "high" ? "high" : rs;
+  html += '<div class="tl-title">' + label + " is " + (r ? formatValue(param, r.value) : "not tested yet") + "</div>" +
+    (t && t.min != null ? '<div class="stat-sub">Target: ' + t.min + "–" + t.max + (param === "pH" ? "" : " ppm") + "</div>" : "");
+
+  if (step === "alkalinity") {
+    html += '<p class="tl-detail" style="margin:8px 0"><b>Correct alkalinity first.</b> Alkalinity helps stabilize pH — correcting pH first means chasing the reading.</p>' +
+      // High TA never shows increaser guidance (§24): lowering only.
+      (dir === "high" ?
+        '<div class="tl-detail">Alkalinity is high — <b>do not add alkalinity increaser</b>. Lower it gradually per your configured procedure: small adjustments, circulate, retest between each.</div>' :
+        doseLine("alkalinity increaser")) + "</div>" +
+      (dir !== "high" ? '<button class="btn" data-act="ff-added" data-param="alkalinity" data-product="piper_alk_buffer">I ADDED ALK+ BUFFER</button>' : "") +
+      '<button class="btn btn-primary" data-act="ff-retest" data-param="alkalinity">RETEST ALKALINITY</button>' +
+      '<button class="btn-quiet" data-act="ff-skip" data-arg="' + nextStartupState(step) + '">Skip for now</button>';
+  } else if (step === "ph") {
+    html += '<p class="tl-detail" style="margin:8px 0">Correct pH before continuing. Adjust → circulate → retest. A new reading closes this step.</p>' +
+      doseLine(dir === "low" ? "pH increaser" : "pH decreaser") + "</div>" +
+      '<button class="btn" data-act="ff-added" data-param="pH" data-product="' + (dir === "low" ? "aqua_ph_plus" : "piper_ph_down") + '">I ADDED pH ' + (dir === "low" ? "PLUS" : "DOWN") + "</button>" +
+      '<button class="btn btn-primary" data-act="ff-retest" data-param="pH">RETEST pH</button>' +
+      '<button class="btn-quiet" data-act="ff-skip" data-arg="' + nextStartupState(step) + '">Skip for now</button>';
+  } else if (step === "hardness") {
+    const iv = r ? asInterval(r.value) : null;
+    if (iv && iv.lo >= 500) {
+      html += '<p class="tl-detail" style="margin:8px 0">Hardness is high. <b>Do not add hardness increaser.</b> High hardness is usually addressed at the next water change.</p></div>' +
+        '<button class="btn btn-primary" data-act="ff-advance" data-arg="chlorine">CONTINUE</button>';
+    } else {
+      html += '<p class="tl-detail" style="margin:8px 0">Hardness appears low. Use <b>Piper Clear Cal</b> with label-based dosing only.</p>' +
+        doseLine("hardness increaser") + "</div>" +
+        '<button class="btn" data-act="ff-added" data-param="hardness" data-product="piper_cal">I ADDED PIPER CLEAR CAL</button>' +
+        '<button class="btn btn-primary" data-act="ff-retest" data-param="hardness">RETEST HARDNESS</button>' +
+        '<button class="btn-quiet" data-act="ff-skip" data-arg="chlorine">Skip for now</button>';
+    }
+  }
+  return html;
+}
+
+function doseLine(role) {
+  const product = findChemical(state, role);
+  const dose = product ? computeDose(product, state.spaProfile) : null;
+  const vol = state.spaProfile.volumeLitres.toLocaleString() + " L / " + state.spaProfile.volumeGallons.toLocaleString() + " gallons";
+  if (dose) return '<div class="tl-detail"><b>' + esc(product.name) + ":</b> " + dose.amount + " " + esc(dose.unit) +
+    ' <span class="muted">(' + esc(dose.note) + ")</span></div>";
+  if (product) return '<div class="tl-detail">Use <b>' + esc(product.name) + "</b> — follow the product label for " + vol + ". You can configure the label dose in Settings.</div>";
+  return '<div class="tl-detail">No product configured. Use the product label for ' + vol + ".</div>";
+}
+
+function nextStartupState(s) {
+  return STARTUP_STATES[STARTUP_STATES.indexOf(s) + 1];
+}
+
+function finalCheckTable() {
+  let rows = "";
+  DASH_ORDER.forEach(p => {
+    const r = latestReading(state, p);
+    if (!r) return;
+    const info = interpretParam(p, r.value, state.targets);
+    rows += '<div class="result-row"><span>' + PARAM_LABELS[p] + "</span><span><b>" + formatValue(p, r.value) + "</b> " +
+      statusBadge(info.status, info.label) + "</span></div>";
+  });
+  return rows;
+}
+
+// Fresh-fill flow actions --------------------------------------------------
+function ffCirculating() {
+  const now = new Date();
+  state.maintenance.lastRefillDate = now.toISOString();
+  addEvent(state, "refill", {}, "", now);
+  setStartupState("initial_test");
+  render();
+}
+
+function ffAfterInitialTest(ev) {
+  // Never dump all corrections at once — the wizard walks alkalinity →
+  // pH → hardness → chlorine → CYA baseline one at a time from here.
+  setStartupState("alkalinity");
+  ui.route = "freshfill";
+  render();
+}
+
+function ffRetest(param) {
+  startTest("retest", param, "fresh_fill", function (ev) {
+    ui.route = "freshfill";
+    maybeAdvanceAfterRetest(param);
+    render();
+  });
+}
+
+function maybeAdvanceAfterRetest(param) {
+  // A step closes on an acceptable NEW reading, never on "I added it".
+  const s = state.startup.state;
+  const r = latestReading(state, param);
+  if (!r) return;
+  if (s === "alkalinity" && param === "alkalinity" &&
+      rangeStatus(r.value, state.targets.alkalinity.min, state.targets.alkalinity.max) === "in") setStartupState("ph");
+  else if (s === "ph" && param === "pH" &&
+      rangeStatus(r.value, state.targets.pH.min, state.targets.pH.max) === "in") setStartupState("hardness");
+  else if (s === "hardness" && param === "hardness" &&
+      interpretHardness(r.value, state.targets).status === "green") setStartupState("chlorine");
+  // chlorine and cya_baseline advance via their own screens.
+}
+
+// Decide where the wizard goes after the final verification test:
+// "complete" only when every correctable reading is acceptable; otherwise
+// back to the earliest failing balance step (alkalinity → pH → hardness →
+// chlorine). CYA is deliberately excluded — it isn't correctable by a
+// wizard step (only dilution) and the baseline step records, never gates.
+function finalTestOutcome(values, targets) {
+  const actions = diagnose(values, targets, "fresh_fill")
+    .filter(a => ["alkalinity", "pH", "hardness", "freeChlorine"].includes(a.parameter));
+  if (actions.length === 0) return "complete";
+  const stepFor = { alkalinity: "alkalinity", pH: "ph", hardness: "hardness", freeChlorine: "chlorine" };
+  const first = ["alkalinity", "pH", "hardness", "freeChlorine"].find(p => actions.some(a => a.parameter === p));
+  return stepFor[first] || "final_test";
+}
+
+function ffFinalTest() {
+  startTest("full", null, "fresh_fill", function (ev) {
+    const next = finalTestOutcome(ev.data.values, state.targets);
+    setStartupState(next);
+    if (next !== "complete") {
+      alert2("Final check found " + STARTUP_STEP_LABELS[next].toLowerCase() + " out of range — returning to that step.");
+    }
+    ui.route = "freshfill";
+    render();
+  });
+}
+
+function ffFinish() {
+  const now = new Date();
+  addEvent(state, "startup_complete", {}, "", now);
+  state.startup.active = false;
+  state.startup.state = null;
+  saveState(state);
+  go("today");
+}
+
+/* ============================================================
+   WATER CHANGE (drain → clean → refill, then joins fresh fill)
+   ============================================================ */
+function viewWaterChange() {
+  const w = ui.waterChange;
+  const now = new Date();
+  const age = waterAgeDays(state, now);
+  const steps = [
+    "Drain the spa",
+    "Clean the interior per manufacturer instructions",
+    "Inspect / clean the filters",
+    "Ready to refill"
+  ];
+  return '<h1 class="screen-title">Water change</h1>' +
+    '<div class="card"><div class="tl-detail">Current water age: <b>' + (age == null ? "unknown" : age + " days") + "</b>. " +
+    "Completing this starts a new ~" + state.maintenance.intervals.waterChangeDays + "-day water cycle and resets CYA to the fill-water baseline.</div></div>" +
+    '<div class="card"><ul class="prog-steps">' + steps.map((s, i) =>
+      '<li class="' + (i < w.step ? "done" : i === w.step ? "current" : "") + '"><span class="p-mark">' +
+      (i < w.step ? "✓" : i === w.step ? "●" : "○") + "</span>" + s + "</li>").join("") + "</ul></div>" +
+    (w.step < steps.length - 1 ?
+      '<button class="btn btn-primary" data-act="wc-next">' + ["SPA IS DRAINED", "INTERIOR CLEANED", "FILTERS DONE"][w.step] + "</button>" :
+      '<button class="btn btn-primary" data-act="wc-refill">START REFILL &amp; FRESH-FILL SETUP</button>') +
+    '<button class="btn-quiet" data-act="wc-cancel">Cancel</button>';
+}
+
+/* ============================================================
+   MAINTENANCE TAB
+   ============================================================ */
+function viewMaintenance() {
+  const now = new Date();
+  const m = maintenanceStatus(state, now);
+  let html = '<h1 class="screen-title">Maintenance</h1>';
+
+  // Water age + dynamic change advice.
+  const levelBadge = { none: "", plan: statusBadge("blue", "plan"), strong: statusBadge("amber", "soon"), due: statusBadge("red", "due") }[m.water.level];
+  html += '<div class="card"><h3>Water age</h3><div class="stat-value">' +
+    (m.water.ageDays == null ? "—" : m.water.ageDays + " / ~" + m.water.intervalDays + " days") +
+    (levelBadge ? " " + levelBadge : "") + "</div>" +
+    '<div class="tl-detail">' + esc(m.water.message) + "</div>" +
+    '<p class="muted" style="margin-top:6px">Refill timing reacts to CYA, age, and water condition — not just the calendar.</p>' +
+    '<button class="btn' + (m.water.level === "due" ? " btn-primary" : "") + '" style="margin-top:10px" data-act="wc-start">START WATER CHANGE</button></div>';
+
+  // Operating mode.
+  const mode = MODES[state.operatingMode];
+  const other = state.operatingMode === "summer_swim" ? MODES.hot_soak : MODES.summer_swim;
+  html += '<div class="card"><h3>Operating mode</h3><div class="tl-title">' + esc(mode.label) + " · " + currentModeTemp(state) + "°F</div>" +
+    '<div class="tl-detail">' + esc(mode.typicalActivity) + "</div>" +
+    '<button class="btn" style="margin-top:10px" data-act="mode-switch">SWITCH TO ' + esc(other.label).toUpperCase() + "</button></div>";
+
+  // Ozone.
+  html += '<div class="card"><h3>Ozone system</h3><div class="tl-detail">' +
+    (state.ozone.installed ? (state.ozone.enabled ? "Enabled. Ozone reduces chlorine demand but never replaces a measurable free-chlorine residual." :
+      "Installed but disabled — expect higher chlorine demand.") : "Not installed.") + "</div>" +
+    (state.ozone.installed ? '<button class="btn" style="margin-top:10px" data-act="ozone-toggle">' +
+      (state.ozone.enabled ? "MARK OZONE DISABLED" : "MARK OZONE ENABLED") + "</button>" : "") + "</div>";
+
+  // Shock.
+  html += '<div class="card"><h3>Oxidation / shock</h3><div class="tl-detail">' +
+    (m.shock.last ? "Last completed " + agoStr(m.shock.last.timestamp, now) +
+      (m.shock.overdue ? " — <b>due now</b>." : m.shock.dueInDays <= 1 ? " — due tomorrow." : " — due in " + m.shock.dueInDays + " days.") :
+      "No shock recorded yet.") +
+    "</div><div class='tl-detail'>Product: Aqua Shock. " + doseLine("oxidizer") + "</div>" +
+    '<button class="btn" style="margin-top:10px" data-act="shock-done">SHOCK COMPLETED</button></div>';
+
+  // Filter cards.
+  const filterCard = (title, item, act, btnLabel) =>
+    '<div class="card"><h3>' + title + '</h3><div class="tl-detail">' +
+    (item.last ? "Last: " + fmtDate(item.last.timestamp) + " (" + agoStr(item.last.timestamp, now) + ")" +
+      (item.overdue ? " — <b>due now</b>" : item.dueInDays != null ? " — due in " + item.dueInDays + " days" : "") :
+      "Never recorded") + "</div>" +
+    '<button class="btn" style="margin-top:10px" data-act="' + act + '">' + btnLabel + "</button></div>";
+  html += filterCard("Filter rinse", m.rinse, "filter-rinse", "RINSED THE FILTERS");
+  html += filterCard("Deep filter clean", m.clean, "filter-clean", "DEEP CLEANED THE FILTERS");
+  html += filterCard("Filter replacement", m.replace, "filter-replace", "REPLACED THE FILTERS");
+
+  // Water problems helper.
+  const cw = cloudyWaterAdvice(state, now);
+  html += '<div class="card"><h3>Water problems?</h3>' +
+    '<details class="why"><summary>Cloudy water</summary><p>' +
+    (cw.first ? esc(cw.first) : (cw.contributors.length ?
+      "Sanitizer is okay. Likely contributors, most likely first:<br>• " + cw.contributors.map(esc).join("<br>• ") :
+      "Sanitizer is okay and no obvious contributor found. Circulate, keep the filters clean, and retest.")) + "</p></details>" +
+    '<details class="why"><summary>Persistent foam</summary><p>' + esc(FOAM_ADVICE.message) +
+    "<br>Common causes:<br>• " + FOAM_ADVICE.causes.map(esc).join("<br>• ") + "</p></details></div>";
+  return html;
+}
+
+/* ============================================================
+   8. CHARTS — inline SVG, time-scaled x axis, no libraries.
+   Discrete strip values plot exactly as recorded; range readings
+   (including the native CYA 30–50 bucket) render as a range bar with a
+   hollow midpoint marker — placement only, storage stays a range.
+   Out-of-range points are diamonds so shape, not just color, carries
+   the distinction. Estimated combined chlorine is a derived series,
+   computed only from tests where both chlorine reads are exact.
+   ============================================================ */
+
+const CHART_PARAMS = ["freeChlorine", "totalChlorine", "combined", "pH", "alkalinity", "hardness", "cya"];
+
+const CHART_Y = {
+  freeChlorine:  (maxSeen) => [0, 10],
+  totalChlorine: (maxSeen) => [0, 10],
+  combined:      (maxSeen) => [0, Math.max(4, Math.ceil(maxSeen))],
+  pH:            () => [6.2, 9.0],
+  alkalinity:    () => [0, 240],
+  hardness:      (maxSeen) => [0, Math.max(500, maxSeen)],
+  cya:           (maxSeen) => [0, Math.max(240, maxSeen)]
+};
+
+function chartTicks(param, dom) {
+  if (param === "pH") return [6.2, 6.8, 7.2, 7.8, 8.4, 9.0];
+  if (param === "freeChlorine" || param === "totalChlorine") return [0, 1, 3, 5, 10];
+  if (param === "combined") return [0, 1, 2, 3].filter(v => v <= dom[1]);
+  if (param === "alkalinity") return [0, 80, 120, 180, 240];
+  if (param === "cya") return [0, 50, 100, 150, 240];
+  return [0, 100, 250, 500].filter(v => v <= dom[1]);
+}
+
+const EVENT_GLYPHS = { swim_session: "🏊", shock: "⚡", chemical_added: "🧪", filter_rinse: "🧽",
+  filter_clean: "🧼", refill: "💧", mode_change: "🔄", ozone_change: "🫧" };
+
+// Point collection: real parameters read stored values; the combined
+// series is computed per test (null when either read is approximate).
+function chartPoints(param, tests) {
+  if (param === "combined") {
+    return tests.map(t => {
+      if (!t.data.values) return null;
+      const cc = combinedChlorine(t.data.values.freeChlorine, t.data.values.totalChlorine);
+      if (cc == null) return null;
+      return { t: new Date(t.timestamp).getTime(), v: cc, test: t, derived: true };
+    }).filter(Boolean);
+  }
+  return tests.filter(t => t.data.values && t.data.values[param] != null)
+    .map(t => ({ t: new Date(t.timestamp).getTime(), v: t.data.values[param], test: t }));
+}
+
+function chartPointStatus(param, v, targets) {
+  if (param === "combined") return v >= 2 ? "amber" : "green";
+  if (param === "totalChlorine") return "green";   // no band of its own
+  return interpretParam(param, v, targets).status;
+}
+
+function svgTrendChart(param, tests, events, targets, now) {
+  const pts = chartPoints(param, tests);
+  if (pts.length === 0) return '<p class="muted" style="padding:0 12px 8px">No ' + PARAM_LABELS[param].toLowerCase() + " data in this range yet.</p>";
+  const W = 600, H = 210, L = 42, R = 12, T = 14, B = 34;
+  const t0 = Math.min.apply(null, pts.map(p => p.t)), t1 = Math.max.apply(null, pts.map(p => p.t));
+  const span = Math.max(t1 - t0, DAY_MS);
+  const x = tm => L + (W - L - R) * ((tm - t0) / span);
+  const maxSeen = Math.max.apply(null, pts.map(p => { const iv = asInterval(p.v); return iv ? iv.hi : p.v; }));
+  const dom = CHART_Y[param](maxSeen);
+  const y = v => T + (H - T - B) * (1 - (v - dom[0]) / (dom[1] - dom[0]));
+  let s = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="' + PARAM_LABELS[param] + ' trend chart">';
+
+  // Target bands. CYA gets three visually distinct zones instead of one
+  // band: preferred (wash), caution ≥100, high ≥150 (deeper washes).
+  const bandRect = (lo, hi, fill, label2) => {
+    if (hi <= dom[0] || lo >= dom[1]) return "";
+    const yTop = y(Math.min(hi, dom[1])), yBot = y(Math.max(lo, dom[0]));
+    return '<rect x="' + L + '" y="' + yTop + '" width="' + (W - L - R) + '" height="' + (yBot - yTop) + '" fill="' + fill + '"/>' +
+      (label2 ? '<text x="' + (L + 4) + '" y="' + (yTop + 11) + '" font-size="9" fill="var(--muted)">' + label2 + "</text>" : "");
+  };
+  if (param === "cya") {
+    const ct = targets.cya;
+    s += bandRect(ct.preferredMin, ct.preferredMax, "var(--band)", "preferred " + ct.preferredMin + "–" + ct.preferredMax);
+    s += bandRect(ct.caution, ct.high, "rgba(250,178,25,0.12)", "caution ≥" + ct.caution);
+    s += bandRect(ct.high, dom[1], "rgba(208,59,59,0.10)", "high ≥" + ct.high);
+  } else if (param !== "totalChlorine" && param !== "combined") {
+    const t = targets[param];
+    if (t && t.min != null) s += bandRect(t.min, t.max, "var(--band)", "target " + t.min + "–" + t.max);
+  }
+
+  chartTicks(param, dom).forEach(v => {
+    s += '<line x1="' + L + '" y1="' + y(v) + '" x2="' + (W - R) + '" y2="' + y(v) + '" stroke="var(--hairline)" stroke-width="1"/>' +
+      '<text x="' + (L - 6) + '" y="' + (y(v) + 3) + '" font-size="10" text-anchor="end" fill="var(--muted)" font-variant-numeric="tabular-nums">' + v + "</text>";
+  });
+  const label = tm => { const d = new Date(tm); return (d.getMonth() + 1) + "/" + d.getDate(); };
+  [t0, (t0 + t1) / 2, t1].forEach((tm, i) => {
+    if (span <= DAY_MS && i !== 0) return;
+    s += '<text x="' + x(tm) + '" y="' + (H - B + 16) + '" font-size="10" text-anchor="middle" fill="var(--muted)">' + label(tm) + "</text>";
+  });
+
+  if (state.settings.showEventMarkers && events) {
+    events.filter(e => EVENT_GLYPHS[e.type])
+      .forEach(e => {
+        const tm = new Date(e.timestamp).getTime();
+        if (tm < t0 - DAY_MS / 2 || tm > t1 + DAY_MS / 2) return;
+        s += '<line x1="' + x(tm) + '" y1="' + T + '" x2="' + x(tm) + '" y2="' + (H - B) + '" stroke="var(--hairline)" stroke-width="1" opacity="0.7"/>' +
+          '<text x="' + x(tm) + '" y="' + (H - B + 30) + '" font-size="10" text-anchor="middle">' + EVENT_GLYPHS[e.type] + "</text>";
+      });
+  }
+
+  const mid = p => { const iv = asInterval(p.v); return iv ? (iv.lo + iv.hi) / 2 : p.v; };
+  if (pts.length > 1) {
+    s += '<path d="' + pts.map((p, i) => (i ? "L" : "M") + x(p.t).toFixed(1) + " " + y(mid(p)).toFixed(1)).join(" ") +
+      '" fill="none" stroke="var(--series-1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+  }
+  pts.forEach(p => {
+    const iv = asInterval(p.v);
+    const st = chartPointStatus(param, p.v, targets);
+    const cx = x(p.t), out = !["green", "blue", "gray"].includes(st);
+    const tip = tooltipData(param, p, now);
+    if (iv && iv.approximate && iv.lo !== iv.hi) {
+      s += '<line x1="' + cx + '" y1="' + y(iv.lo) + '" x2="' + cx + '" y2="' + y(iv.hi) + '" stroke="var(--series-1)" stroke-width="2"/>' +
+        '<circle cx="' + cx + '" cy="' + y(mid(p)) + '" r="5" fill="var(--surface)" stroke="var(--series-1)" stroke-width="2" data-tip="' + tip + '"/>';
+    } else if (out) {
+      const cy = y(mid(p));
+      s += '<rect x="' + (cx - 5) + '" y="' + (cy - 5) + '" width="10" height="10" transform="rotate(45 ' + cx + " " + cy +
+        ')" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2" data-tip="' + tip + '"/>';
+    } else {
+      s += '<circle cx="' + cx + '" cy="' + y(mid(p)) + '" r="4.5" fill="var(--series-1)" stroke="var(--surface)" stroke-width="2" data-tip="' + tip + '"/>';
+    }
+    s += '<circle cx="' + cx + '" cy="' + y(mid(p)) + '" r="14" fill="transparent" data-tip="' + tip + '"/>';
+  });
+  s += "</svg>";
+  return s + '<div class="legend"><span class="lg"><i style="background:var(--series-1)"></i>' +
+    (param === "combined" ? "estimate" : "reading") + '</span>' +
+    '<span class="lg">◆ out of range</span><span class="lg">○ range read</span></div>';
+}
+
+// Tooltip payload for a chart point: value, status, context, mode/temp,
+// water age at test time, and the nearest preceding event.
+function tooltipData(param, p, now) {
+  const test = p.test;
+  const valueTxt = p.derived ? "~" + p.v + " ppm" : formatValue(param, p.v);
+  const statusTxt = p.derived ? (p.v >= 2 ? "Elevated" : "OK") : interpretParam(param, p.v, state.targets).label;
+  let age = "";
+  if (state.maintenance.lastRefillDate && test.timestamp >= state.maintenance.lastRefillDate) {
+    age = Math.floor(ageDays(state.maintenance.lastRefillDate, new Date(test.timestamp))) + " days";
+  }
+  const prev = state.events.filter(e => e.type !== "water_test" && e.timestamp < test.timestamp).pop();
+  let prevTxt = "";
+  if (prev) {
+    const hrs = Math.round((new Date(test.timestamp) - new Date(prev.timestamp)) / 3600000);
+    if (hrs <= 72) prevTxt = eventTitle(prev) + " · " + hrs + "h earlier";
+  }
+  const modeTxt = (MODES[test.data.operatingMode] || {}).label || "";
+  const obj = {
+    when: fmtDate(test.timestamp, true), param: PARAM_LABELS[param],
+    value: valueTxt, status: statusTxt,
+    context: (test.data.context || "normal").replace(/_/g, " ") +
+      (modeTxt ? " · " + modeTxt + " · " + (test.data.waterTemperatureF || "?") + "°F" : ""),
+    age: age, prev: prevTxt
+  };
+  return esc(JSON.stringify(obj));
+}
+
+// Tooltip fields round-trip through JSON.parse, so they arrive unescaped
+// and can carry user-entered text. Escape every field before innerHTML.
+function tooltipHtml(d) {
+  return "<b>" + esc(d.when) + "</b><br>" + esc(d.param) + ": <b>" + esc(d.value) + "</b> — " + esc(d.status) +
+    "<br>Context: " + esc(d.context) + (d.age ? "<br>Water age: " + esc(d.age) : "") +
+    (d.prev ? "<br><span class='muted'>Previous event: " + esc(d.prev) + "</span>" : "");
+}
+
+function bindCharts() {
+  if (bindCharts._done) return;
+  bindCharts._done = true;
+  const tip = document.getElementById("tip");
+  document.addEventListener("click", function (e) {
+    const el = e.target.closest && e.target.closest("[data-tip]");
+    if (!el) { tip.style.display = "none"; return; }
+    const d = JSON.parse(el.getAttribute("data-tip"));
+    tip.innerHTML = tooltipHtml(d);
+    tip.style.display = "block";
+    const r = el.getBoundingClientRect();
+    tip.style.left = Math.min(window.innerWidth - 250, Math.max(8, r.left - 60)) + "px";
+    tip.style.top = Math.max(8, r.top - tip.offsetHeight - 10) + "px";
+  });
+}
+
+/* ============================================================
+   HISTORY TAB — Timeline + Trends
+   ============================================================ */
+function eventTitle(ev) {
+  switch (ev.type) {
+    case "water_test": {
+      const tt = ev.data.testType;
+      const ctx = ev.data.context;
+      const pre = ctx === "after_use" ? "Post-use " : ctx === "fresh_fill" ? "Fresh-fill " : "";
+      return pre + (tt === "quick" ? "quick test" : tt === "retest" ? "retest" : "full water test");
+    }
+    case "chemical_added": return "Added " + (ev.data.productName || "chemical");
+    case "shock": return "Shock completed";
+    case "swim_session": return (ev.data.bathersLabel || ev.data.bathers) + " bathers · " +
+      (ev.data.sessionType || "") + " · " + (ev.data.duration || "");
+    case "filter_rinse": return "Filters rinsed";
+    case "filter_clean": return "Filters deep cleaned";
+    case "filter_replace": return "Filters replaced";
+    case "drain_started": return "Draining started";
+    case "refill": return "Refilled spa";
+    case "startup_complete": return "Water setup complete";
+    case "mode_change": return "Mode → " + ((MODES[ev.data.to] || {}).label || ev.data.to);
+    case "ozone_change": return "Ozone " + (ev.data.enabled ? "enabled" : "disabled");
+    case "note": return "Note";
+    default: return ev.type;
+  }
+}
+
+function eventDetail(ev) {
+  if (ev.type === "water_test" && ev.data.values) {
+    const short = { freeChlorine: "FC", totalChlorine: "TC", pH: "pH", alkalinity: "TA", hardness: "CH", cya: "CYA" };
+    const parts = [];
+    DASH_ORDER.forEach(p => {
+      if (ev.data.values[p] != null) parts.push(short[p] + ": " + formatValue(p, ev.data.values[p]).replace(" ppm", ""));
+    });
+    let s = parts.join(" · ");
+    const modeTxt = (MODES[ev.data.operatingMode] || {}).label;
+    if (modeTxt) s += "\n" + modeTxt + " · " + (ev.data.waterTemperatureF || "?") + "°F";
+    if (ev.data.observations) {
+      const o = ev.data.observations;
+      const flags = Object.keys(o).filter(k => !["clear", "none", "normal"].includes(o[k])).map(k => o[k]);
+      if (flags.length) s += "\n" + flags.join(", ");
+    }
+    return s;
+  }
+  if (ev.type === "swim_session") {
+    const cls = loadClass(ev);
+    return (cls !== "normal" ? cls + " load · " : "") + (ev.data.waterTemperatureF || "?") + "°F";
+  }
+  return "";
+}
+
+function viewHistory() {
+  let html = '<h1 class="screen-title">History</h1>' +
+    '<div class="seg"><button data-act="hist-tab" data-arg="timeline" class="' + (ui.historyTab === "timeline" ? "sel" : "") + '">Timeline</button>' +
+    '<button data-act="hist-tab" data-arg="trends" class="' + (ui.historyTab === "trends" ? "sel" : "") + '">Trends</button></div>';
+  return html + (ui.historyTab === "trends" ? viewTrends() : viewTimeline());
+}
+
+function viewTimeline() {
+  const evs = state.events.slice().reverse();
+  if (evs.length === 0) return '<div class="card"><p class="tl-detail">Nothing logged yet. Run your first test or start a fresh fill.</p></div>';
+  let html = '<div class="card">';
+  evs.forEach(ev => {
+    if (ev.type === "refill") {
+      html += '<div class="tl-divider">💧 New water cycle — ' + fmtDate(ev.timestamp) + "</div>";
+    }
+    html += '<div class="tl-item"><span class="tl-icon">' + (EVENT_GLYPHS[ev.type] || (ev.type === "water_test" ? "🧪" : "📝")) + "</span>" +
+      '<div class="tl-body"><div class="tl-when">' + fmtDate(ev.timestamp, true) + "</div>" +
+      '<div class="tl-title">' + esc(eventTitle(ev)) + "</div>" +
+      (eventDetail(ev) ? '<div class="tl-detail">' + esc(eventDetail(ev)) + "</div>" : "") +
+      (ev.notes ? '<div class="tl-detail">📝 ' + esc(ev.notes) + "</div>" : "") + "</div></div>";
+  });
+  html += "</div>" +
+    '<div class="card"><h3>Add a note</h3><div class="field"><input id="note-text" placeholder="e.g. water feels great today"></div>' +
+    '<button class="btn" data-act="note-save">SAVE NOTE</button></div>';
+  return html;
+}
+
+function trendRangeTests(range, now) {
+  let tests = waterTests(state);
+  if (range === "cycle") {
+    const cid = currentCycleId(state);
+    tests = tests.filter(t => t.waterCycleId === cid);
+  } else if (range === "prev") {
+    // Previous water cycle (§43): the cycle immediately before the
+    // most recent refill.
+    const cycles = waterCycles(state);
+    const prev = cycles.length >= 2 ? cycles[cycles.length - 2] : null;
+    tests = prev ? prev.events.filter(e => e.type === "water_test") : [];
+  } else if (range !== "all") {
+    const days = { "7d": 7, "30d": 30, "90d": 90, "1y": 365 }[range];
+    const cutoff = new Date(now.getTime() - days * DAY_MS).toISOString();
+    tests = tests.filter(t => t.timestamp >= cutoff);
+  }
+  return tests;
+}
+
+function viewTrends() {
+  const now = new Date();
+  const ranges = [["7d", "7 days"], ["30d", "30 days"], ["90d", "90 days"], ["cycle", "Water cycle"], ["prev", "Previous cycle"], ["1y", "1 year"], ["all", "All"]];
+  const tests = trendRangeTests(ui.trendRange, now);
+  const allTests = waterTests(state);
+  let html = '<div class="seg">' + ranges.map(r =>
+    '<button data-act="trend-range" data-arg="' + r[0] + '" class="' + (ui.trendRange === r[0] ? "sel" : "") + '">' + r[1] + "</button>").join("") + "</div>";
+
+  html += trendSummaryCard(now);
+
+  if (allTests.length < 2) {
+    html += '<div class="card"><p class="tl-detail">Keep testing — trend insights will appear after several readings.</p></div>';
+    return html;
+  }
+
+  html += '<div class="seg"><button data-act="toggle-markers" class="' + (state.settings.showEventMarkers ? "sel" : "") + '">' +
+    (state.settings.showEventMarkers ? "✓ " : "") + "Show events</button></div>";
+
+  CHART_PARAMS.forEach(p => {
+    html += '<div class="card chart-card"><h3>' + PARAM_LABELS[p] +
+      (ui.trendRange === "cycle" ? " — current water cycle" : "") + "</h3>" +
+      (p === "combined" ? '<p class="muted" style="padding:0 12px">Estimated from total − free; only shown where both reads are exact.</p>' : "") +
+      svgTrendChart(p, tests, state.events, state.targets, now) + "</div>";
+  });
+
+  // Water-cycle summaries & comparison.
+  const cycles = waterCycles(state).filter(c => c.start || c.events.length);
+  if (cycles.length) {
+    html += '<div class="card"><h3>Water cycles</h3>';
+    cycles.slice().reverse().forEach((c, idx) => {
+      const isCurrent = idx === 0;
+      const sum = cycleSummary(c, state.targets, isCurrent ? now : null);
+      html += '<div style="padding:8px 0;border-bottom:1px solid var(--hairline)">' +
+        '<div class="tl-title">' + (isCurrent ? "Current cycle" : "Cycle") + (c.start ? " · " + fmtDate(c.start) : " · before first recorded refill") +
+        (sum.days != null ? " · " + sum.days + " days" : "") + "</div>" +
+        '<div class="tl-detail">' + sum.testCount + " tests · " + sum.sessionCount + " sessions (" +
+        sum.highLoadCount + " high-load) · " + sum.shockCount + " shocks</div>";
+      const pcts = [];
+      ["freeChlorine", "pH", "alkalinity"].forEach(p => {
+        if (sum.inRangePct[p] != null) pcts.push(PARAM_LABELS[p] + " in range " + sum.inRangePct[p] + "%");
+      });
+      if (pcts.length) html += '<div class="tl-detail">' + pcts.join(" · ") + "</div>";
+      if (sum.cyaStart != null || sum.cyaEnd != null) {
+        html += '<div class="tl-detail">CYA: started ' + (sum.cyaStart != null ? formatValue("cya", sum.cyaStart) : "—") +
+          " · now " + (sum.cyaEnd != null ? formatValue("cya", sum.cyaEnd) : "—") + "</div>";
+      }
+      if (sum.mostOutOfRange) html += '<div class="tl-detail">Most common issue: ' + PARAM_LABELS[sum.mostOutOfRange].toLowerCase() + " out of range</div>";
+      html += "</div>";
+    });
+    html += "</div>";
+  }
+  return html;
+}
+
+function trendSummaryCard(now) {
+  const cutoff = new Date(now.getTime() - 30 * DAY_MS).toISOString();
+  const tests = waterTests(state).filter(t => t.timestamp >= cutoff);
+  const patterns = detectPatterns(state, now);
+  if (tests.length < 3 && patterns.length === 0) {
+    return '<div class="card"><h3>Last 30 days</h3><p class="tl-detail">Keep testing — trend insights will appear after several readings.</p></div>';
+  }
+  let goods = [], warns = [];
+  ["freeChlorine", "pH", "alkalinity", "hardness", "cya"].forEach(p => {
+    const withP = tests.filter(t => t.data.values && t.data.values[p] != null);
+    if (withP.length < 2) return;
+    const out = withP.filter(t => !["green", "blue", "gray"].includes(interpretParam(p, t.data.values[p], state.targets).status));
+    if (out.length === 0) goods.push(PARAM_LABELS[p] + " has stayed in range");
+    else warns.push(PARAM_LABELS[p] + " was out of range on " + out.length + " of " + withP.length + " tests");
+  });
+  let html = '<div class="card"><h3>Last 30 days</h3>';
+  goods.forEach(g => { html += '<div class="tl-detail">✓ ' + esc(g) + "</div>"; });
+  warns.forEach(w => { html += '<div class="tl-detail">⚠ ' + esc(w) + "</div>"; });
+  patterns.forEach(p => {
+    html += '<div style="margin-top:8px"><div class="tl-title">Pattern detected: ' + esc(p.title.toLowerCase()) + "</div>" +
+      '<div class="tl-detail">' + esc(p.detail) + " " + esc(p.suggestion || "") + "</div></div>";
+  });
+  return html + "</div>";
+}
+
+/* ============================================================
+   SETTINGS TAB
+   ============================================================ */
+function num(id, fallback) {
+  const el = document.getElementById(id);
+  const v = el ? parseFloat(el.value) : NaN;
+  return isNaN(v) ? fallback : v;
+}
+function str(id, fallback) {
+  const el = document.getElementById(id);
+  return el && el.value !== "" ? el.value : (fallback || "");
+}
+
+function viewSettings() {
+  const p = state.spaProfile, t = state.targets, iv = state.maintenance.intervals;
+  let html = '<h1 class="screen-title">Settings</h1>';
+
+  html += '<div class="card"><h3>Spa</h3>' +
+    '<div class="field"><label>Spa name</label><input id="s-name" value="' + esc(state.settings.spaName) + '"></div>' +
+    '<div class="field-row"><div class="field"><label>Volume (US gal)</label><input id="s-gal" type="number" value="' + p.volumeGallons + '"></div>' +
+    '<div class="field"><label>Volume (litres)</label><input id="s-lit" type="number" value="' + p.volumeLitres + '"></div></div>' +
+    '<div class="field-row"><div class="field"><label>Summer temp (°F)</label><input id="s-temp-summer" type="number" value="' + state.settings.modeTemps.summer_swim + '"></div>' +
+    '<div class="field"><label>Soak temp (°F)</label><input id="s-temp-soak" type="number" value="' + state.settings.modeTemps.hot_soak + '"></div></div>' +
+    '<button class="btn" data-act="set-spa">SAVE SPA SETTINGS</button></div>';
+
+  const tRow = (id, label, lo, hi) =>
+    '<div class="field-row"><div class="field"><label>' + label + ' min</label><input id="' + id + '-min" type="number" step="0.1" value="' + lo + '"></div>' +
+    '<div class="field"><label>' + label + ' max</label><input id="' + id + '-max" type="number" step="0.1" value="' + hi + '"></div></div>';
+  html += '<div class="card"><h3>Targets</h3>' +
+    tRow("t-fc", "Free chlorine", t.freeChlorine.min, t.freeChlorine.max) +
+    tRow("t-ph", "pH", t.pH.min, t.pH.max) +
+    tRow("t-alk", "Alkalinity", t.alkalinity.min, t.alkalinity.max) +
+    tRow("t-hd", "Hardness", t.hardness.min, t.hardness.max) +
+    '<h3 style="margin-top:12px">CYA zones (editable — no universal drain number)</h3>' +
+    tRow("t-cya-pref", "CYA preferred", t.cya.preferredMin, t.cya.preferredMax) +
+    '<div class="field-row"><div class="field"><label>CYA caution (ppm)</label><input id="t-cya-caution" type="number" value="' + t.cya.caution + '"></div>' +
+    '<div class="field"><label>CYA high (ppm)</label><input id="t-cya-high" type="number" value="' + t.cya.high + '"></div></div>' +
+    '<button class="btn" data-act="set-targets">SAVE TARGETS</button></div>';
+
+  html += '<div class="card"><h3>Maintenance intervals</h3>' +
+    '<div class="field-row"><div class="field"><label>Shock (days)</label><input id="i-shock" type="number" value="' + iv.shockDays + '"></div>' +
+    '<div class="field"><label>Filter rinse (days)</label><input id="i-rinse" type="number" value="' + iv.filterRinseDays + '"></div></div>' +
+    '<div class="field-row"><div class="field"><label>Deep clean (days)</label><input id="i-clean" type="number" value="' + iv.filterCleanDays + '"></div>' +
+    '<div class="field"><label>Filter replace (months)</label><input id="i-repl" type="number" value="' + iv.filterReplaceMonths + '"></div></div>' +
+    '<div class="field"><label>Water change (days, nominal — CYA can pull it in)</label><input id="i-water" type="number" value="' + iv.waterChangeDays + '"></div>' +
+    '<div class="field-row"><div class="field"><label>Quick-test reminder (days)</label><input id="i-quick" type="number" value="' + iv.quickTestDays + '"></div>' +
+    '<div class="field"><label>Full-test reminder (days)</label><input id="i-full" type="number" value="' + iv.fullTestDays + '"></div></div>' +
+    '<button class="btn" data-act="set-intervals">SAVE INTERVALS</button></div>';
+
+  html += '<div class="card"><h3>Chemical inventory</h3>';
+  state.chemicalInventory.filter(c => c.role !== "testing").forEach(c => {
+    const dose = computeDose(c, state.spaProfile);
+    html += '<div style="padding:8px 0;border-bottom:1px solid var(--hairline)">' +
+      '<div class="tl-title">' + esc(c.name) + "</div>" +
+      '<div class="tl-detail">' + esc(c.role) + (dose ? " · label dose configured ✓" : " · no label dose — app will say “follow the label”") + "</div>";
+    if (ui.editingChem === c.id) {
+      const d = c.dosing || {};
+      html += '<div class="field-row"><div class="field"><label>Label dose (per ref. volume)</label><input id="c-dose" type="number" step="0.1" value="' + (d.labelDose || "") + '"></div>' +
+        '<div class="field"><label>Reference volume (L)</label><input id="c-vol" type="number" value="' + (d.referenceVolume || "") + '"></div></div>' +
+        '<div class="field"><label>Unit</label><input id="c-unit" value="' + esc(d.unit || "g") + '"></div>' +
+        '<div class="field"><label>Notes</label><input id="c-notes" value="' + esc(c.notes || "") + '"></div>' +
+        '<div class="btn-row"><button class="btn" data-act="chem-save" data-arg="' + c.id + '">SAVE</button>' +
+        '<button class="btn" data-act="chem-cancel">CANCEL</button></div>';
+    } else {
+      html += '<button class="btn-quiet" data-act="chem-edit" data-arg="' + c.id + '">Configure label dose →</button>';
+    }
+    html += "</div>";
+  });
+  html += '<div class="safety">Never premix spa chemicals or combine concentrated chemicals together. Add products separately and follow the product label.</div></div>';
+
+  html += '<div class="card"><h3>Backup</h3>' +
+    '<button class="btn" data-act="export">EXPORT DATA (JSON)</button>' +
+    '<label class="btn" style="display:block"><input type="file" id="import-file" accept="application/json" style="display:none">IMPORT DATA…</label>' +
+    '<button class="btn btn-danger" data-act="reset">RESET APP</button>' +
+    '<p class="muted">Export preserves every raw test (timestamps, strip values/ranges, kit, context, temperature, mode, water cycle), chemical additions, shocks, sessions, filters, refills and ozone state — charts are always rebuilt from raw history.</p></div>';
+
+  html += '<p class="muted">' + esc(p.manufacturer) + " " + esc(p.model) + " · " + p.volumeGallons.toLocaleString() +
+    " gal · chlorine + ozone · v" + APP_VERSION + "</p>";
+  return html;
+}
+
+/* ============================================================
+   9. IMPORT / EXPORT
+   ============================================================ */
+function exportData() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "xl4-backup-" + localDateStr(new Date()) + ".json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function importData(file) {
+  const reader = new FileReader();
+  reader.onload = function () {
+    try {
+      const parsed = JSON.parse(reader.result);
+      if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.events)) {
+        alert2("That file doesn't look like an XL4 backup."); return;
+      }
+      // Persist raw, then reload through loadState() so imports get the
+      // same defensive default-merging as startup.
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+      state = loadState();
+      go("today");
+    } catch (e) { alert2("Could not read that file."); }
+  };
+  reader.readAsText(file);
+}
+
+// Non-blocking notice (avoids native alert(), which can freeze automation).
+function alert2(msg) {
+  const d = document.createElement("div");
+  d.className = "chart-tip";
+  d.style.display = "block"; d.style.left = "16px"; d.style.right = "16px"; d.style.top = "16px"; d.style.pointerEvents = "auto";
+  d.textContent = msg;
+  document.body.appendChild(d);
+  setTimeout(() => d.remove(), 3000);
+}
+
+/* ============================================================
+   EVENT DELEGATION — every interactive element carries data-act.
+   ============================================================ */
+function handleAction(act, el) {
+  const arg = el.getAttribute("data-arg");
+  const now = new Date();
+  switch (act) {
+    case "nav": go(arg); break;
+    case "canuse": {
+      const r = canWeUseIt(state, now);
+      const cls = r.verdict === "YES" ? "banner-green" : r.verdict === "TEST_FIRST" ? "banner-gray" : "banner-red";
+      const word = r.verdict === "YES" ? "YES ✓" : r.verdict === "TEST_FIRST" ? "TEST FIRST" : "NOT YET";
+      document.getElementById("app").innerHTML = '<div class="screen">' +
+        '<h1 class="screen-title">Can we use it?</h1>' +
+        '<div class="banner ' + cls + '"><div class="b-title">' + word + '</div><div class="b-why">' + esc(r.reason) + "</div></div>" +
+        (r.verdict === "TEST_FIRST" ? '<button class="btn btn-primary" data-act="test-begin" data-arg="quick">QUICK TEST NOW</button>' : "") +
+        (r.verdict === "NOT_YET" && r.action && r.action.parameter === "freeChlorine" && !r.action.doNotAdd ?
+          '<button class="btn btn-primary" data-act="chem-action" data-arg="freeChlorine">VIEW ACTION</button>' : "") +
+        '<button class="btn" data-act="nav" data-arg="today">BACK</button></div>' + viewTabBar();
+      break;
+    }
+    case "test-begin": startTest(arg === "quick" ? "quick" : "full"); break;
+    case "test-step":
+      if (arg === "dip") { ui.testFlow.step = "dip"; render(); }
+      else if (arg === "timer") startTimer();
+      else if (arg === "entry") { ui.testFlow.step = "entry"; render(); }
+      break;
+    case "test-cancel": ui.testFlow = null; render(); break;
+    case "test-save": saveTestFlow(); break;
+    case "tile": {
+      // Tiles address kit buckets BY INDEX — never parseFloat, because
+      // the CYA pad's "30–50" bucket is a range object, and collapsing
+      // it to a number would fabricate precision the strip lacks.
+      const f = ui.testFlow, param = el.getAttribute("data-param");
+      const idx = parseInt(el.getAttribute("data-idx"), 10);
+      const vals = f.kit.parameters[param].values;
+      const b = vals[idx], biv = bucketInterval(b);
+      if (f.between[param]) {
+        if (f._betweenFirst && f._betweenFirst.param === param) {
+          const first = vals[f._betweenFirst.idx], fiv = bucketInterval(first);
+          if (Math.abs(f._betweenFirst.idx - idx) === 1) {
+            f.values[param] = { lower: Math.min(fiv.lo, biv.lo), upper: Math.max(fiv.hi, biv.hi), approximate: true };
+            f._betweenFirst = null;
+          } else { f._betweenFirst = { param, idx }; }
+        } else { f._betweenFirst = { param, idx }; f.values[param] = null; }
+      } else if (typeof b === "number") {
+        f.values[param] = { value: b, approximate: false };
+      } else {
+        // Native range bucket (CYA 30–50): stored as a range, as-is.
+        f.values[param] = { lower: b.lower, upper: b.upper, approximate: true };
+      }
+      render(); break;
+    }
+    case "between": {
+      const f = ui.testFlow, param = el.getAttribute("data-param");
+      f.between[param] = !f.between[param];
+      f.values[param] = null; f._betweenFirst = null;
+      render(); break;
+    }
+    case "ctx": ui.testFlow.context = arg; render(); break;
+    case "obs": {
+      const g = el.getAttribute("data-group");
+      ui.testFlow.observations[g] = ui.testFlow.observations[g] === arg ? undefined : arg;
+      if (ui.testFlow.observations[g] === undefined) delete ui.testFlow.observations[g];
+      render(); break;
+    }
+    case "retest": startTest("retest", arg); break;
+    case "retest-quick": startTest("quick", null, "after_use"); break;
+    case "chem-action": viewChemAction(arg); break;
+    case "chem-added": {
+      const param = el.getAttribute("data-param");
+      const prod = findChemical(state, el.getAttribute("data-product"));
+      addEvent(state, "chemical_added", { parameter: param, productId: prod ? prod.id : null,
+        productName: prod ? prod.name : "chemical" }, "", now);
+      saveState(state);
+      startTest("retest", param, "after_chemicals");
+      break;
+    }
+    case "session-start": ui.sessionFlow = { bathers: state.spaProfile.regularBathers,
+      sessionType: "Mixed use", duration: "15–30 min", temp: currentModeTemp(state) }; render(); break;
+    case "sess-bathers": ui.sessionFlow.bathers = arg; render(); break;
+    case "sess-type": ui.sessionFlow.sessionType = arg; render(); break;
+    case "sess-dur": ui.sessionFlow.duration = arg; render(); break;
+    case "sess-save": saveSession(); break;
+    case "sess-cancel": ui.sessionFlow = null; render(); break;
+    case "shock-done":
+      addEvent(state, "shock", { productId: "aqua_shock" }, "", now);
+      saveState(state); go("maintenance"); break;
+    case "filter-rinse": addEvent(state, "filter_rinse", {}, "", now); saveState(state); render(); break;
+    case "filter-clean": addEvent(state, "filter_clean", {}, "", now); saveState(state); render(); break;
+    case "filter-replace": addEvent(state, "filter_replace", {}, "", now); saveState(state); render(); break;
+    case "mode-switch": {
+      const to = state.operatingMode === "summer_swim" ? "hot_soak" : "summer_swim";
+      addEvent(state, "mode_change", { from: state.operatingMode, to: to }, "", now);
+      state.operatingMode = to;
+      saveState(state); render(); break;
+    }
+    case "ozone-toggle":
+      state.ozone.enabled = !state.ozone.enabled;
+      addEvent(state, "ozone_change", { enabled: state.ozone.enabled }, "", now);
+      saveState(state); render(); break;
+    // Fresh fill.
+    case "freshfill-start": setStartupState("refill"); go("freshfill"); break;
+    case "ff-circulating": ffCirculating(); break;
+    case "ff-initial-test": startTest("full", null, "fresh_fill", ffAfterInitialTest); break;
+    case "ff-retest": ffRetest(el.getAttribute("data-param")); break;
+    case "ff-added": {
+      const prod = findChemical(state, el.getAttribute("data-product"));
+      addEvent(state, "chemical_added", { parameter: el.getAttribute("data-param"),
+        productId: prod ? prod.id : null, productName: prod ? prod.name : "chemical" }, "", now);
+      saveState(state);
+      alert2("Logged. Circulate according to the chemical label, then retest.");
+      render(); break;
+    }
+    case "ff-advance": setStartupState(arg); render(); break;
+    case "ff-skip": setStartupState(arg); render(); break;
+    case "ff-final-test": ffFinalTest(); break;
+    case "ff-finish": ffFinish(); break;
+    // Water change.
+    case "wc-start": {
+      addEvent(state, "drain_started", { previousWaterAgeDays: waterAgeDays(state, now) }, "", now);
+      saveState(state);
+      ui.waterChange = { step: 0 }; render(); break;
+    }
+    case "wc-next": ui.waterChange.step += 1; render(); break;
+    case "wc-refill": ui.waterChange = null; setStartupState("refill"); go("freshfill"); break;
+    case "wc-cancel": ui.waterChange = null; render(); break;
+    // History.
+    case "hist-tab": ui.historyTab = arg; render(); break;
+    case "trend-range": ui.trendRange = arg; render(); break;
+    case "toggle-markers": state.settings.showEventMarkers = !state.settings.showEventMarkers; saveState(state); render(); break;
+    case "note-save": {
+      const txt = str("note-text", "");
+      if (txt) { addEvent(state, "note", {}, txt, now); saveState(state); render(); }
+      break;
+    }
+    // Settings.
+    case "set-spa":
+      state.settings.spaName = str("s-name", state.settings.spaName);
+      state.spaProfile.volumeGallons = num("s-gal", state.spaProfile.volumeGallons);
+      state.spaProfile.volumeLitres = num("s-lit", state.spaProfile.volumeLitres);
+      state.settings.modeTemps.summer_swim = num("s-temp-summer", state.settings.modeTemps.summer_swim);
+      state.settings.modeTemps.hot_soak = num("s-temp-soak", state.settings.modeTemps.hot_soak);
+      saveState(state); alert2("Saved."); render(); break;
+    case "set-targets":
+      state.targets.freeChlorine.min = num("t-fc-min", 3); state.targets.freeChlorine.max = num("t-fc-max", 5);
+      state.targets.pH.min = num("t-ph-min", 7.2); state.targets.pH.max = num("t-ph-max", 7.8);
+      state.targets.alkalinity.min = num("t-alk-min", 80); state.targets.alkalinity.max = num("t-alk-max", 120);
+      state.targets.hardness.min = num("t-hd-min", 150); state.targets.hardness.max = num("t-hd-max", 250);
+      state.targets.cya.preferredMin = num("t-cya-pref-min", 20); state.targets.cya.preferredMax = num("t-cya-pref-max", 50);
+      state.targets.cya.caution = num("t-cya-caution", 100); state.targets.cya.high = num("t-cya-high", 150);
+      saveState(state); alert2("Saved."); render(); break;
+    case "set-intervals": {
+      const iv = state.maintenance.intervals;
+      iv.shockDays = num("i-shock", iv.shockDays);
+      iv.filterRinseDays = num("i-rinse", iv.filterRinseDays);
+      iv.filterCleanDays = num("i-clean", iv.filterCleanDays);
+      iv.filterReplaceMonths = num("i-repl", iv.filterReplaceMonths);
+      iv.waterChangeDays = num("i-water", iv.waterChangeDays);
+      iv.quickTestDays = num("i-quick", iv.quickTestDays);
+      iv.fullTestDays = num("i-full", iv.fullTestDays);
+      saveState(state); alert2("Saved."); render(); break;
+    }
+    case "chem-edit": ui.editingChem = arg; render(); break;
+    case "chem-cancel": ui.editingChem = null; render(); break;
+    case "chem-save": {
+      const c = state.chemicalInventory.find(x => x.id === arg);
+      if (c) {
+        c.notes = str("c-notes", "");
+        const dose = num("c-dose", 0), vol = num("c-vol", 0);
+        c.dosing = (dose > 0 && vol > 0) ? { labelDose: dose, unit: str("c-unit", "g"), referenceVolume: vol } : null;
+      }
+      ui.editingChem = null; saveState(state); render(); break;
+    }
+    case "export": exportData(); break;
+    case "reset":
+      if (ui._confirmReset) {
+        localStorage.removeItem(STORAGE_KEY);
+        state = defaultState(); ui._confirmReset = false; go("today");
+      } else {
+        ui._confirmReset = true;
+        el.textContent = "TAP AGAIN TO CONFIRM RESET";
+        setTimeout(() => { ui._confirmReset = false; if (document.body.contains(el)) el.textContent = "RESET APP"; }, 4000);
+      }
+      break;
+  }
+}
+
+/* ============================================================
+   10. APP INITIALIZATION — guarded so the chemistry engine can be
+   loaded under Node (tests) without a DOM.
+   ============================================================ */
+if (typeof document !== "undefined" && document.getElementById) {
+  state = loadState();
+  document.addEventListener("click", function (e) {
+    const el = e.target.closest && e.target.closest("[data-act]");
+    if (el) handleAction(el.getAttribute("data-act"), el);
+  });
+  document.addEventListener("change", function (e) {
+    if (e.target && e.target.id === "import-file" && e.target.files && e.target.files[0]) {
+      importData(e.target.files[0]);
+    }
+  });
+  // Reopening mid fresh-fill resumes the wizard instead of Today.
+  ui.route = state.startup.active ? "freshfill" : "today";
+  render();
+}
+</script>
+</body>
+</html>
