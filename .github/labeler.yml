@@ -1,0 +1,11 @@
+# actions/labeler v5 config — labels applied by changed files
+frontend:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "index.html"
+
+test:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "tests/**"
+          - ".github/workflows/ci.yml"
