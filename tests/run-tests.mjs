@@ -42,7 +42,7 @@ const S = vm.runInContext(`({
   cycleSummary, trendDirection, detectPatterns, waterChangeAdvice,
   computeDose, findChemical, maintenanceStatus, cloudyWaterAdvice,
   startupInProgress, finalTestOutcome, tooltipHtml, freshFillBalanceStep,
-  bucketInterval, chartPoints
+  bucketInterval, chartPoints, doseLine, trendRangeTests
 })`, sandbox);
 
 /* ---------------- tiny test runner ---------------- */
@@ -413,6 +413,78 @@ test("State round-trips through storage with range readings intact", () => {
   const back = S.loadState();
   const cya = back.events[0].data.values.cya;
   ok(cya.approximate && cya.lower === 30 && cya.upper === 50, "range survives storage");
+});
+
+console.log("\n== Codex review regressions ==");
+
+test("High TA in fresh fill: lowering guidance only, never the increaser", () => {
+  const st = freshState();
+  st.startup = { active: true, state: "alkalinity" };
+  addTest(st, "2026-08-29T09:00:00", { alkalinity: val(180) }, "fresh_fill", "retest");
+  vm.runInContext("state = " + JSON.stringify(st), sandbox);
+  const html = vm.runInContext('freshFillBalanceStep("alkalinity", new Date("2026-08-29T12:00:00"))', sandbox);
+  ok(/do not add alkalinity increaser/i.test(html), "explicit do-not-add guidance");
+  ok(!/I ADDED ALK\+ BUFFER/.test(html), "no increaser button");
+  ok(!/Alk\+ Buffer:/.test(html), "no increaser dose line");
+  // Low TA still gets the increaser flow.
+  const st2 = freshState();
+  st2.startup = { active: true, state: "alkalinity" };
+  addTest(st2, "2026-08-29T09:00:00", { alkalinity: val(40) }, "fresh_fill", "retest");
+  vm.runInContext("state = " + JSON.stringify(st2), sandbox);
+  const low = vm.runInContext('freshFillBalanceStep("alkalinity", new Date("2026-08-29T12:00:00"))', sandbox);
+  ok(/I ADDED ALK\+ BUFFER/.test(low), "low TA offers the buffer");
+});
+
+test("Trend direction uses interval order — CYA 30–50 is never a midpoint", () => {
+  eq(S.trendDirection([val(0), range(30, 50), val(100)]), "rising");
+  eq(S.trendDirection([range(30, 50), range(30, 50), range(30, 50)]), "stable");
+  eq(S.trendDirection([val(100), range(30, 50), val(0)]), "falling");
+  // Overlapping intervals compare as equal (honest strip answer):
+  eq(S.trendDirection([range(30, 50), val(40), range(30, 50)]), "stable");
+});
+
+test("CYA accumulation pattern is provable from bucket intervals, not midpoints", () => {
+  const st = freshState();
+  st.maintenance.lastRefillDate = "2026-06-01T12:00:00";
+  S.addEvent(st, "refill", {}, "", "2026-06-01T12:00:00");
+  // 30–50 → 30–50 → 100: newest floor (100) clears first ceiling (50) by
+  // exactly 50 — provable rise from the buckets themselves.
+  addTest(st, "2026-06-02T09:00:00", { cya: range(30, 50) });
+  addTest(st, "2026-07-01T09:00:00", { cya: range(30, 50) });
+  addTest(st, "2026-08-01T09:00:00", { cya: val(100) });
+  ok(S.detectPatterns(st, NOW).some(p => p.id === "cya_accumulating"), "provable rise detected");
+  // 0 → 30–50 → 30–50: floor 30 vs ceiling 0 = 30 ppm — not provably ≥50.
+  const st2 = freshState();
+  st2.maintenance.lastRefillDate = "2026-06-01T12:00:00";
+  S.addEvent(st2, "refill", {}, "", "2026-06-01T12:00:00");
+  addTest(st2, "2026-06-02T09:00:00", { cya: val(0) });
+  addTest(st2, "2026-07-01T09:00:00", { cya: range(30, 50) });
+  addTest(st2, "2026-08-01T09:00:00", { cya: range(30, 50) });
+  ok(!S.detectPatterns(st2, NOW).some(p => p.id === "cya_accumulating"), "ambiguous rise not over-claimed");
+});
+
+test("Dose guidance escapes user-entered units (no XSS)", () => {
+  const st = freshState();
+  const shock = st.chemicalInventory.find(c => c.id === "aqua_shock");
+  shock.dosing = { labelDose: 10, unit: 'g</b><img src=x onerror=alert(1)>', referenceVolume: 1000 };
+  vm.runInContext("state = " + JSON.stringify(st), sandbox);
+  const html = vm.runInContext('doseLine("oxidizer")', sandbox);
+  ok(!html.includes("<img"), "raw tag must not survive");
+  ok(html.includes("&lt;img"), "unit is HTML-escaped");
+});
+
+test("Previous-cycle trend range returns only the prior cycle's tests", () => {
+  const st = freshState();
+  addTest(st, "2026-05-01T09:00:00", { freeChlorine: val(3) });        // cycle 1 (pre-refill era)
+  S.addEvent(st, "refill", {}, "", "2026-06-01T12:00:00");
+  addTest(st, "2026-06-05T09:00:00", { freeChlorine: val(3) });        // cycle 2
+  st.maintenance.lastRefillDate = "2026-08-01T12:00:00";
+  S.addEvent(st, "refill", {}, "", "2026-08-01T12:00:00");
+  addTest(st, "2026-08-05T09:00:00", { freeChlorine: val(3) });        // cycle 3 (current)
+  vm.runInContext("state = " + JSON.stringify(st), sandbox);
+  const prev = vm.runInContext('trendRangeTests("prev", new Date("2026-08-29T12:00:00"))', sandbox);
+  eq(prev.length, 1, "one test in the previous cycle");
+  eq(prev[0].localDate, "2026-06-05");
 });
 
 /* ---------------- summary ---------------- */

@@ -960,13 +960,18 @@ function cycleSummary(cycle, targets, now) {
   };
 }
 
-/* ---------- Trend direction (dashboard cards) ---------- */
+/* ---------- Trend direction (dashboard cards) ----------
+   Interval-ordered comparison — range readings (including the CYA
+   30–50 bucket) are never collapsed to midpoints. An interval is
+   "higher" only when it sits entirely above the other; overlapping
+   intervals compare as equal, which is the honest strip answer. */
+function ivGreater(x, y) { return x.lo > y.hi; }
 function trendDirection(vals) {
-  const nums = vals.map(v => { const iv = asInterval(v); return iv ? (iv.lo + iv.hi) / 2 : null; }).filter(n => n != null);
-  if (nums.length < 3) return "insufficient";
-  const [a, b, c] = nums.slice(-3);
-  if (c > a && c >= b) return "rising";
-  if (c < a && c <= b) return "falling";
+  const ivs = vals.map(asInterval).filter(Boolean);
+  if (ivs.length < 3) return "insufficient";
+  const [a, b, c] = ivs.slice(-3);
+  if (ivGreater(c, a) && !ivGreater(b, c)) return "rising";
+  if (ivGreater(a, c) && !ivGreater(c, b)) return "falling";
   return "stable";
 }
 
@@ -1015,14 +1020,18 @@ function detectPatterns(state, now) {
       suggestion: "Check free chlorine after play dates and shock when load has been heavy." });
   }
 
-  // CYA accumulation across the current water cycle.
+  // CYA accumulation across the current water cycle. Compared as
+  // intervals/bucket order — the 30–50 bucket is never a midpoint.
   const cid = currentCycleId(state);
   const cyaCycle = tests.filter(t => t.waterCycleId === cid && t.data.values && t.data.values.cya != null)
-    .map(t => { const iv = asInterval(t.data.values.cya); return (iv.lo + iv.hi) / 2; });
+    .map(t => asInterval(t.data.values.cya));
   if (cyaCycle.length >= 3) {
     let nonDecreasing = true;
-    for (let i = 1; i < cyaCycle.length; i++) if (cyaCycle[i] < cyaCycle[i - 1]) nonDecreasing = false;
-    if (nonDecreasing && cyaCycle[cyaCycle.length - 1] - cyaCycle[0] >= 50) {
+    for (let i = 1; i < cyaCycle.length; i++)
+      if (cyaCycle[i].lo < cyaCycle[i - 1].lo || cyaCycle[i].hi < cyaCycle[i - 1].hi) nonDecreasing = false;
+    // Rise is conservative: the newest reading's floor must clear the
+    // first reading's ceiling by 50+ ppm — provable from the buckets.
+    if (nonDecreasing && cyaCycle[cyaCycle.length - 1].lo - cyaCycle[0].hi >= 50) {
       patterns.push({ id: "cya_accumulating", title: "CYA is accumulating during this water cycle",
         detail: "Stabilized chlorine adds CYA with every dose; it only leaves with the water.",
         suggestion: "Refill planning recommended." });
@@ -1596,19 +1605,23 @@ function viewChemAction(param) {
   const r = latestReading(state, param);
   const t = state.targets[param];
   const rs = r && t && t.min != null ? rangeStatus(r.value, t.min, t.max) : "unknown";
-  const roleNeeded = param === "alkalinity" ? "alkalinity increaser" :
+  // High alkalinity must never surface the increaser (§24): it is
+  // lowered gradually per the configured procedure, not dosed up.
+  const alkHigh = param === "alkalinity" && rs === "high";
+  const roleNeeded = param === "alkalinity" ? (alkHigh ? null : "alkalinity increaser") :
     param === "pH" ? (rs === "low" ? "pH increaser" : "pH decreaser") :
     param === "hardness" ? "hardness increaser" : "routine sanitizer";
-  const product = findChemical(state, roleNeeded);
+  const product = roleNeeded ? findChemical(state, roleNeeded) : null;
   const dose = product ? computeDose(product, state.spaProfile) : null;
   const vol = state.spaProfile.volumeLitres.toLocaleString() + " L / " + state.spaProfile.volumeGallons + " US gallons";
   let html = '<h1 class="screen-title">Correct ' + PARAM_LABELS[param].toLowerCase() + "</h1>" +
     '<div class="card">' +
     '<div class="result-row"><span>Current</span><b>' + (r ? formatValue(param, r.value) : "—") + "</b></div>" +
     (t && t.min != null ? '<div class="result-row"><span>Target</span><b>' + t.min + "–" + t.max + (param === "pH" ? "" : " ppm") + "</b></div>" : "") +
-    '<div class="result-row"><span>Product</span><b>' + (product ? esc(product.name) : "Not configured") + "</b></div>" +
-    '<div class="result-row"><span>Dose</span><span>' + (dose ?
-      "<b>" + dose.amount + " " + dose.unit + "</b><br><span class='muted'>" + esc(dose.note) + "</span>" :
+    '<div class="result-row"><span>Product</span><b>' + (alkHigh ? "— (lowering procedure)" : product ? esc(product.name) : "Not configured") + "</b></div>" +
+    '<div class="result-row"><span>Dose</span><span>' + (alkHigh ?
+      "Alkalinity is high — <b>do not add alkalinity increaser</b>. Lower it gradually per your configured procedure: small adjustments, circulate, retest between each." :
+      dose ? "<b>" + dose.amount + " " + esc(dose.unit) + "</b><br><span class='muted'>" + esc(dose.note) + "</span>" :
       "Follow the product label for approximately <b>" + vol + "</b>.") + "</span></div></div>";
   if (param === "freeChlorine") {
     html += '<div class="card"><div class="tl-detail">Aqua Granular is stabilized chlorine — every dose also adds CYA. That\'s normal, and it\'s why CYA is tracked on every full test.</div></div>';
@@ -1807,9 +1820,11 @@ function freshFillBalanceStep(step, now) {
     (t && t.min != null ? '<div class="stat-sub">Target: ' + t.min + "–" + t.max + (param === "pH" ? "" : " ppm") + "</div>" : "");
 
   if (step === "alkalinity") {
-    html += '<p class="tl-detail" style="margin:8px 0"><b>Correct alkalinity first.</b> Alkalinity helps stabilize pH — correcting pH first means chasing the reading.' +
-      (dir === "high" ? " Lower it gradually per your configured procedure." : "") + "</p>" +
-      doseLine("alkalinity increaser") + "</div>" +
+    html += '<p class="tl-detail" style="margin:8px 0"><b>Correct alkalinity first.</b> Alkalinity helps stabilize pH — correcting pH first means chasing the reading.</p>' +
+      // High TA never shows increaser guidance (§24): lowering only.
+      (dir === "high" ?
+        '<div class="tl-detail">Alkalinity is high — <b>do not add alkalinity increaser</b>. Lower it gradually per your configured procedure: small adjustments, circulate, retest between each.</div>' :
+        doseLine("alkalinity increaser")) + "</div>" +
       (dir !== "high" ? '<button class="btn" data-act="ff-added" data-param="alkalinity" data-product="piper_alk_buffer">I ADDED ALK+ BUFFER</button>' : "") +
       '<button class="btn btn-primary" data-act="ff-retest" data-param="alkalinity">RETEST ALKALINITY</button>' +
       '<button class="btn-quiet" data-act="ff-skip" data-arg="' + nextStartupState(step) + '">Skip for now</button>';
@@ -1839,7 +1854,7 @@ function doseLine(role) {
   const product = findChemical(state, role);
   const dose = product ? computeDose(product, state.spaProfile) : null;
   const vol = state.spaProfile.volumeLitres.toLocaleString() + " L / " + state.spaProfile.volumeGallons.toLocaleString() + " gallons";
-  if (dose) return '<div class="tl-detail"><b>' + esc(product.name) + ":</b> " + dose.amount + " " + dose.unit +
+  if (dose) return '<div class="tl-detail"><b>' + esc(product.name) + ":</b> " + dose.amount + " " + esc(dose.unit) +
     ' <span class="muted">(' + esc(dose.note) + ")</span></div>";
   if (product) return '<div class="tl-detail">Use <b>' + esc(product.name) + "</b> — follow the product label for " + vol + ". You can configure the label dose in Settings.</div>";
   return '<div class="tl-detail">No product configured. Use the product label for ' + vol + ".</div>";
@@ -2290,6 +2305,12 @@ function trendRangeTests(range, now) {
   if (range === "cycle") {
     const cid = currentCycleId(state);
     tests = tests.filter(t => t.waterCycleId === cid);
+  } else if (range === "prev") {
+    // Previous water cycle (§43): the cycle immediately before the
+    // most recent refill.
+    const cycles = waterCycles(state);
+    const prev = cycles.length >= 2 ? cycles[cycles.length - 2] : null;
+    tests = prev ? prev.events.filter(e => e.type === "water_test") : [];
   } else if (range !== "all") {
     const days = { "7d": 7, "30d": 30, "90d": 90, "1y": 365 }[range];
     const cutoff = new Date(now.getTime() - days * DAY_MS).toISOString();
@@ -2300,7 +2321,7 @@ function trendRangeTests(range, now) {
 
 function viewTrends() {
   const now = new Date();
-  const ranges = [["7d", "7 days"], ["30d", "30 days"], ["90d", "90 days"], ["cycle", "Water cycle"], ["1y", "1 year"], ["all", "All"]];
+  const ranges = [["7d", "7 days"], ["30d", "30 days"], ["90d", "90 days"], ["cycle", "Water cycle"], ["prev", "Previous cycle"], ["1y", "1 year"], ["all", "All"]];
   const tests = trendRangeTests(ui.trendRange, now);
   const allTests = waterTests(state);
   let html = '<div class="seg">' + ranges.map(r =>
