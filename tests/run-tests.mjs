@@ -579,6 +579,14 @@ test("Table dosing: reading-keyed lookup; uncovered readings return null", () =>
   // Lowering from a 7.8–8.4 range: conservative endpoint is 7.8, which
   // the label table doesn't cover → no invented dose.
   eq(S.computeDose(phDown, S.SPA_PROFILE, ctx(range(7.8, 8.4))), null);
+  // The max-per-treatment cap applies to table doses too and never
+  // rounds above the label maximum.
+  const cappedTable = { name: "pH down", dosing: { unit: "g", referenceVolume: 1000,
+    maxPerTreatment: 20, table: { "8.4": 30, "9.0": 45 } } };
+  const capped = S.computeDose(cappedTable, S.SPA_PROFILE, ctx(val(8.4)));
+  const maxScaled = 20 * S.SPA_PROFILE.volumeLitres / 1000; // 117.34
+  ok(capped.staged, "table dose flagged as staged");
+  ok(capped.amount <= maxScaled, "amount " + capped.amount + " must not exceed " + maxScaled);
 });
 
 test("CYA contribution surfaces only from label-stated data", () => {

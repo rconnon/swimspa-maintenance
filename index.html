@@ -1206,7 +1206,13 @@ function computeDose(product, spaProfile, ctx) {
     const endpoint = ctx.direction === "lower" ? iv.lo : iv.hi;   // conservative: smaller dose
     const row = d.table[String(endpoint)];
     if (row == null) return null;   // label table doesn't cover this reading
-    return { amount: roundDose(row * scale), unit, basis: "table", usedReading: endpoint,
+    // The max-per-treatment cap applies to every shape, table included;
+    // a capped dose floors so rounding never exceeds the label maximum.
+    let amount = row * scale;
+    let staged = false;
+    if (d.maxPerTreatment && amount > d.maxPerTreatment * scale) { amount = d.maxPerTreatment * scale; staged = true; }
+    amount = staged ? Math.floor(amount) : roundDose(amount);
+    return { amount, unit, basis: "table", usedReading: endpoint, staged,
       labelText: d.labelText || "", conservative: !!iv.approximate };
   }
 
