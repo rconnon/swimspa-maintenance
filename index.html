@@ -328,15 +328,21 @@ const TEST_KITS = {
   }
 };
 
-// Approximate chart pad colors — decorative hints only; the number is
-// always shown and color is never the sole channel.
+// Approximate chart pad colors, matched to the actual EasyTest 7-in-1
+// bottle chart (sampled from photos of the bottle, Aug 2026):
+//   hardness: steel blue → purple · free chlorine: white → pink → purple
+//   total chlorine: pale yellow-green → green · CYA: orange → salmon-pink
+//   alkalinity: pale yellow → green → teal → sky blue
+//   pH: mustard → orange → coral red
+// Decorative hints only — the number is always shown and color is never
+// the sole channel.
 const PAD_COLORS = {
-  hardness:      { 0:"#7ec8e3", 100:"#9db8d9", 250:"#8d9dcb", 500:"#7c72ad", 1000:"#6a4f96" },
-  freeChlorine:  { 0:"#fdf6cf", 0.5:"#f7ec9e", 1:"#f3e26f", 3:"#e9cf46", 5:"#d9a83e", 10:"#b97a3a" },
-  totalChlorine: { 0:"#fdf6cf", 0.5:"#f7ec9e", 1:"#f3e26f", 3:"#e9cf46", 5:"#d9a83e", 10:"#b97a3a" },
-  cya:           { 0:"#f7d9a8", "30-50":"#eab879", 100:"#d99054", 150:"#c46a3f", 240:"#a34a33" },
-  alkalinity:    { 0:"#f0e27a", 40:"#cfd97a", 80:"#a8c973", 120:"#7cb46e", 180:"#4f9a68", 240:"#2c7e5f" },
-  pH:            { 6.2:"#f2b04e", 6.8:"#ec9a45", 7.2:"#e5813f", 7.8:"#d9603c", 8.4:"#c74a48", 9.0:"#a93a52" }
+  hardness:      { 0:"#4e7fae", 100:"#5570b5", 250:"#8163ab", 500:"#925fa6", 1000:"#8f4d90" },
+  freeChlorine:  { 0:"#f2efe7", 0.5:"#ecdcec", 1:"#e7c3e0", 3:"#dfa5d4", 5:"#cf8ac6", 10:"#a75ba0" },
+  totalChlorine: { 0:"#e8e18a", 0.5:"#d8e08c", 1:"#c9dd8b", 3:"#b5d98a", 5:"#9ed489", 10:"#7fcc86" },
+  cya:           { 0:"#e59a62", "30-50":"#ee9282", 100:"#f19390", 150:"#ef8e9d", 240:"#f08fa9" },
+  alkalinity:    { 0:"#eee8a2", 40:"#c6e3b4", 80:"#a8dcc0", 120:"#96d5cd", 180:"#8fcde0", 240:"#7cc3ea" },
+  pH:            { 6.2:"#e9b355", 6.8:"#ec9b47", 7.2:"#ec8f3f", 7.8:"#ea8440", 8.4:"#e96e4c", 9.0:"#e75f52" }
 };
 
 // Chemical inventory (all products the user already owns). Doses are
