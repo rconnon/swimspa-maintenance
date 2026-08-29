@@ -451,6 +451,19 @@ function loadState() {
     merged.settings = Object.assign(base.settings, parsed.settings || {});
     merged.settings.modeTemps = Object.assign({ summer_swim: 85, hot_soak: 102 }, (parsed.settings || {}).modeTemps || {});
     merged.ozone = Object.assign(base.ozone, parsed.ozone || {});
+    // Chemical inventory: existing installs stored the inventory before
+    // factory label-dosing data existed. Adopt factory dosing wherever
+    // the user never configured their own (stored dosing === null), and
+    // append factory products missing from the stored list — otherwise
+    // preloaded label data would only ever reach fresh installs.
+    const factory = JSON.parse(JSON.stringify(DEFAULT_CHEMICALS));
+    const stored = Array.isArray(parsed.chemicalInventory) ? parsed.chemicalInventory : [];
+    merged.chemicalInventory = factory.map(f => {
+      const s = stored.find(x => x.id === f.id);
+      if (!s) return f;
+      if (s.dosing == null && f.dosing != null) s.dosing = f.dosing;
+      return s;
+    }).concat(stored.filter(s => !factory.some(f => f.id === s.id)));
     return merged;
   } catch (e) {
     return defaultState();
@@ -1125,16 +1138,91 @@ function detectPatterns(state, now) {
 }
 
 /* ============================================================
-   6. DOSE CALCULATOR — label data only, never hardcoded doses.
+   6. DOSE CALCULATOR — exact manufacturer-label math, never guessed.
+   A dose is only computed from configured label data. Three label
+   shapes are supported, because real directions come in all three:
+     flat  — "add labelDose per referenceVolume" (shock, routine dose)
+     rate  — "labelDose changes the parameter by `effect` (ppm or pH
+              units) in referenceVolume" (TA, hardness, chlorine)
+     table — "current reading → dose per referenceVolume" (pH products)
+   The label's own numbers and units are stored verbatim (capfuls stay
+   capfuls); only the volume scaling to this spa is computed. Strip
+   readings are coarse, so delta doses use the CONSERVATIVE reading
+   endpoint — the one producing the smaller dose — and the intended
+   loop is add → circulate → retest → repeat, never one-shot.
    ============================================================ */
-function computeDose(product, spaProfile) {
-  if (!product || !product.dosing || !product.dosing.labelDose || !product.dosing.referenceVolume) return null;
+
+// Round to label-practical amounts: nearest 5 above 100, whole units
+// above 10, one decimal below.
+function roundDose(x) {
+  if (x >= 100) return Math.round(x / 5) * 5;
+  if (x >= 10) return Math.round(x);
+  return Math.round(x * 10) / 10;
+}
+
+// ctx (optional): { param, current: <stored reading value>,
+//                   target: {min,max}, direction: "raise"|"lower" }
+// Returns null (no usable label data), {refuse}, {noDoseNeeded}, or
+// {amount, unit, basis, ...} — callers must handle all four.
+function computeDose(product, spaProfile, ctx) {
+  if (!product || !product.dosing || !product.dosing.referenceVolume) return null;
   const d = product.dosing;
-  const scaled = d.labelDose * spaProfile.volumeLitres / d.referenceVolume;
+  const scale = spaProfile.volumeLitres / d.referenceVolume;
+  const unit = d.unit || "g";
+
+  // Engine-level refusal: never compute a sanitizer dose at/above the
+  // do-not-add level, regardless of what the caller asks for.
+  if (ctx && ctx.param === "freeChlorine" && ctx.current != null) {
+    const iv = asInterval(ctx.current);
+    if (iv && iv.lo >= 10) return { refuse: "Free chlorine is high — do not add more sanitizer. Retest after it falls." };
+  }
+
+  // TABLE shape: the label maps the current reading to a dose.
+  if (d.table && ctx && ctx.current != null) {
+    const iv = asInterval(ctx.current);
+    if (!iv) return null;
+    const endpoint = ctx.direction === "lower" ? iv.lo : iv.hi;   // conservative: smaller dose
+    const row = d.table[String(endpoint)];
+    if (row == null) return null;   // label table doesn't cover this reading
+    return { amount: roundDose(row * scale), unit, basis: "table", usedReading: endpoint,
+      labelText: d.labelText || "", conservative: !!iv.approximate };
+  }
+
+  if (!d.labelDose) return null;
+
+  // RATE shape: dose the conservative endpoint toward the target (the
+  // label's own stated target `aim` wins over our band midpoint).
+  if (d.effect && ctx && ctx.current != null && ctx.target) {
+    const iv = asInterval(ctx.current);
+    if (!iv) return null;
+    const endpoint = ctx.direction === "lower" ? iv.lo : iv.hi;
+    const aim = d.aim != null ? d.aim : (ctx.target.min + ctx.target.max) / 2;
+    const delta = ctx.direction === "lower" ? endpoint - aim : aim - endpoint;
+    if (delta <= 0) return { noDoseNeeded: true };
+    let amount = d.labelDose * (delta / d.effect) * scale;
+    let staged = false;
+    if (d.maxPerTreatment && amount > d.maxPerTreatment * scale) {
+      amount = d.maxPerTreatment * scale;
+      staged = true;
+    }
+    // Never round a capped dose above the label maximum — floor instead.
+    amount = staged ? Math.floor(amount) : roundDose(amount);
+    const out = { amount, unit, basis: "rate", usedReading: endpoint, aim, delta,
+      staged, labelText: d.labelText || "", conservative: !!iv.approximate };
+    // Stabilized chlorine adds CYA; surface it only when the label
+    // states the contribution (ppm CYA per labelDose in referenceVolume).
+    if (d.cyaPerDose) out.addsCya = Math.round(d.cyaPerDose * (amount / scale) / d.labelDose * 10) / 10;
+    return out;
+  }
+
+  // FLAT shape: plain volume scaling of the label dose.
+  let amount = d.labelDose * scale;
+  let staged = false;
+  if (d.maxPerTreatment && amount > d.maxPerTreatment * scale) { amount = d.maxPerTreatment * scale; staged = true; }
   return {
-    amount: Math.round(scaled * 10) / 10,
-    unit: d.unit || "g",
-    note: "Scaled from the product label (" + d.labelDose + " " + (d.unit || "g") +
+    amount: staged ? Math.floor(amount * 10) / 10 : Math.round(amount * 10) / 10, unit, basis: "flat", staged,
+    labelText: d.labelText || "",
+    note: "Scaled from the product label (" + d.labelDose + " " + unit +
           " per " + d.referenceVolume + " L) for " + spaProfile.volumeLitres + " L."
   };
 }
@@ -1639,6 +1727,27 @@ function renderResult(ev) {
 /* ============================================================
    CHEMICAL ACTION SCREEN
    ============================================================ */
+// Dose cell for the chem-action screen. Handles every computeDose
+// outcome; all label-sourced fields are escaped (user-editable).
+function doseText(dose, ctx, vol) {
+  if (dose && dose.refuse) return "⚠ " + esc(dose.refuse);
+  if (dose && dose.noDoseNeeded) return "No dose needed by the conservative read — retest to confirm before adding anything.";
+  if (dose && dose.amount != null) {
+    let s = "<b>" + dose.amount + " " + esc(dose.unit) + "</b>";
+    if (dose.basis !== "flat" && dose.usedReading != null) {
+      s += " — per the label, for a " + (ctx && ctx.direction === "lower" ? "reduction" : "rise") +
+        " from ~" + dose.usedReading + (dose.aim != null ? " toward ~" + dose.aim : "") + ". Add, circulate, retest.";
+    }
+    if (dose.staged) s += " This is the label's maximum single treatment — repeat after retesting.";
+    if (dose.conservative) s += " Reading was a range, so this doses from the conservative end to avoid overshoot.";
+    if (dose.addsCya) s += " Adds ~" + dose.addsCya + " ppm CYA.";
+    if (dose.labelText) s += "<br><span class='muted'>Label: “" + esc(dose.labelText) + "”</span>";
+    else if (dose.note) s += "<br><span class='muted'>" + esc(dose.note) + "</span>";
+    return s;
+  }
+  return "Follow the product label for approximately <b>" + vol + "</b>.";
+}
+
 function viewChemAction(param) {
   const r = latestReading(state, param);
   const t = state.targets[param];
@@ -1650,7 +1759,11 @@ function viewChemAction(param) {
     param === "pH" ? (rs === "low" ? "pH increaser" : "pH decreaser") :
     param === "hardness" ? "hardness increaser" : "routine sanitizer";
   const product = roleNeeded ? findChemical(state, roleNeeded) : null;
-  const dose = product ? computeDose(product, state.spaProfile) : null;
+  // Exact label math needs the current reading, the target band, and
+  // the direction of correction.
+  const doseCtx = (r && t && t.min != null) ? { param, current: r.value, target: t,
+    direction: rs === "high" ? "lower" : "raise" } : null;
+  const dose = product ? computeDose(product, state.spaProfile, doseCtx) : null;
   const vol = state.spaProfile.volumeLitres.toLocaleString() + " L / " + state.spaProfile.volumeGallons + " US gallons";
   let html = '<h1 class="screen-title">Correct ' + PARAM_LABELS[param].toLowerCase() + "</h1>" +
     '<div class="card">' +
@@ -1659,8 +1772,7 @@ function viewChemAction(param) {
     '<div class="result-row"><span>Product</span><b>' + (alkHigh ? "— (lowering procedure)" : product ? esc(product.name) : "Not configured") + "</b></div>" +
     '<div class="result-row"><span>Dose</span><span>' + (alkHigh ?
       "Alkalinity is high — <b>do not add alkalinity increaser</b>. Lower it gradually per your configured procedure: small adjustments, circulate, retest between each." :
-      dose ? "<b>" + dose.amount + " " + esc(dose.unit) + "</b><br><span class='muted'>" + esc(dose.note) + "</span>" :
-      "Follow the product label for approximately <b>" + vol + "</b>.") + "</span></div></div>";
+      doseText(dose, doseCtx, vol)) + "</span></div></div>";
   if (param === "freeChlorine") {
     html += '<div class="card"><div class="tl-detail">Aqua Granular is stabilized chlorine — every dose also adds CYA. That\'s normal, and it\'s why CYA is tracked on every full test.</div></div>';
   }
@@ -1838,7 +1950,8 @@ function freshFillBalanceStep(step, now) {
     }
     html += '<div class="tl-title">Establish free chlorine</div>' +
       '<p class="tl-detail" style="margin:8px 0">Target 3–5 ppm using <b>Aqua Granular</b> (stabilized chlorine). Ozone should be running if normally enabled — it reduces demand but never replaces the residual.</p>' +
-      doseLine("routine sanitizer") +
+      doseLine("routine sanitizer", { param: "freeChlorine", current: r ? r.value : null,
+        target: state.targets.freeChlorine, direction: "raise" }) +
       '<div class="safety">Never premix spa chemicals. Add products separately and follow the product label.</div></div>' +
       '<button class="btn" data-act="ff-added" data-param="freeChlorine" data-product="aqua_granular">I ADDED CHLORINE</button>' +
       '<button class="btn btn-primary" data-act="ff-retest" data-param="freeChlorine">RETEST FREE CHLORINE</button>';
@@ -1862,13 +1975,16 @@ function freshFillBalanceStep(step, now) {
       // High TA never shows increaser guidance (§24): lowering only.
       (dir === "high" ?
         '<div class="tl-detail">Alkalinity is high — <b>do not add alkalinity increaser</b>. Lower it gradually per your configured procedure: small adjustments, circulate, retest between each.</div>' :
-        doseLine("alkalinity increaser")) + "</div>" +
+        doseLine("alkalinity increaser", { param: "alkalinity", current: r ? r.value : null,
+          target: state.targets.alkalinity, direction: "raise" })) + "</div>" +
       (dir !== "high" ? '<button class="btn" data-act="ff-added" data-param="alkalinity" data-product="piper_alk_buffer">I ADDED ALK+ BUFFER</button>' : "") +
       '<button class="btn btn-primary" data-act="ff-retest" data-param="alkalinity">RETEST ALKALINITY</button>' +
       '<button class="btn-quiet" data-act="ff-skip" data-arg="' + nextStartupState(step) + '">Skip for now</button>';
   } else if (step === "ph") {
     html += '<p class="tl-detail" style="margin:8px 0">Correct pH before continuing. Adjust → circulate → retest. A new reading closes this step.</p>' +
-      doseLine(dir === "low" ? "pH increaser" : "pH decreaser") + "</div>" +
+      doseLine(dir === "low" ? "pH increaser" : "pH decreaser",
+        { param: "pH", current: r ? r.value : null, target: state.targets.pH,
+          direction: dir === "low" ? "raise" : "lower" }) + "</div>" +
       '<button class="btn" data-act="ff-added" data-param="pH" data-product="' + (dir === "low" ? "aqua_ph_plus" : "piper_ph_down") + '">I ADDED pH ' + (dir === "low" ? "PLUS" : "DOWN") + "</button>" +
       '<button class="btn btn-primary" data-act="ff-retest" data-param="pH">RETEST pH</button>' +
       '<button class="btn-quiet" data-act="ff-skip" data-arg="' + nextStartupState(step) + '">Skip for now</button>';
@@ -1879,7 +1995,8 @@ function freshFillBalanceStep(step, now) {
         '<button class="btn btn-primary" data-act="ff-advance" data-arg="chlorine">CONTINUE</button>';
     } else {
       html += '<p class="tl-detail" style="margin:8px 0">Hardness appears low. Use <b>Piper Clear Cal</b> with label-based dosing only.</p>' +
-        doseLine("hardness increaser") + "</div>" +
+        doseLine("hardness increaser", { param: "hardness", current: r ? r.value : null,
+          target: state.targets.hardness, direction: "raise" }) + "</div>" +
         '<button class="btn" data-act="ff-added" data-param="hardness" data-product="piper_cal">I ADDED PIPER CLEAR CAL</button>' +
         '<button class="btn btn-primary" data-act="ff-retest" data-param="hardness">RETEST HARDNESS</button>' +
         '<button class="btn-quiet" data-act="ff-skip" data-arg="chlorine">Skip for now</button>';
@@ -1888,13 +2005,30 @@ function freshFillBalanceStep(step, now) {
   return html;
 }
 
-function doseLine(role) {
+// One-line dose guidance for a product role. ctx (optional) enables the
+// exact delta/table math; without it only flat label scaling applies.
+// Every interpolated field is escaped — label text and units are
+// user-editable via Settings.
+function doseLine(role, ctx) {
   const product = findChemical(state, role);
-  const dose = product ? computeDose(product, state.spaProfile) : null;
+  const dose = product ? computeDose(product, state.spaProfile, ctx) : null;
   const vol = state.spaProfile.volumeLitres.toLocaleString() + " L / " + state.spaProfile.volumeGallons.toLocaleString() + " gallons";
-  if (dose) return '<div class="tl-detail"><b>' + esc(product.name) + ":</b> " + dose.amount + " " + esc(dose.unit) +
-    ' <span class="muted">(' + esc(dose.note) + ")</span></div>";
-  if (product) return '<div class="tl-detail">Use <b>' + esc(product.name) + "</b> — follow the product label for " + vol + ". You can configure the label dose in Settings.</div>";
+  if (dose && dose.refuse) return '<div class="tl-detail">⚠ ' + esc(dose.refuse) + "</div>";
+  if (dose && dose.noDoseNeeded) return '<div class="tl-detail">No dose needed by the conservative read — retest to confirm before adding anything.</div>';
+  if (dose && dose.amount != null) {
+    let s = '<div class="tl-detail"><b>' + esc(product.name) + ": " + dose.amount + " " + esc(dose.unit) + "</b>";
+    if (dose.basis !== "flat" && dose.usedReading != null) {
+      s += " — per the label, for a " + (ctx && ctx.direction === "lower" ? "reduction" : "rise") +
+        " from ~" + dose.usedReading + (dose.aim != null ? " toward ~" + dose.aim : "") + ". Add, circulate, retest.";
+    }
+    if (dose.staged) s += " This is the label's maximum single treatment — repeat after retesting.";
+    if (dose.conservative) s += " Reading was a range, so this doses from the conservative end to avoid overshoot.";
+    if (dose.addsCya) s += " Adds ~" + dose.addsCya + " ppm CYA.";
+    if (dose.labelText) s += ' <span class="muted">Label: “' + esc(dose.labelText) + '”</span>';
+    else if (dose.note) s += ' <span class="muted">(' + esc(dose.note) + ")</span>";
+    return s + "</div>";
+  }
+  if (product) return '<div class="tl-detail">Use <b>' + esc(product.name) + "</b> — follow the product label for " + vol + ". Configure the label dose in Settings for an exact amount.</div>";
   return '<div class="tl-detail">No product configured. Use the product label for ' + vol + ".</div>";
 }
 
@@ -2496,15 +2630,18 @@ function viewSettings() {
 
   html += '<div class="card"><h3>Chemical inventory</h3>';
   state.chemicalInventory.filter(c => c.role !== "testing").forEach(c => {
-    const dose = computeDose(c, state.spaProfile);
+    const configured = c.dosing && (c.dosing.labelDose || c.dosing.table);
     html += '<div style="padding:8px 0;border-bottom:1px solid var(--hairline)">' +
       '<div class="tl-title">' + esc(c.name) + "</div>" +
-      '<div class="tl-detail">' + esc(c.role) + (dose ? " · label dose configured ✓" : " · no label dose — app will say “follow the label”") + "</div>";
+      '<div class="tl-detail">' + esc(c.role) + (configured ? " · label dosing configured ✓" : " · no label dose — app will say “follow the label”") + "</div>";
     if (ui.editingChem === c.id) {
       const d = c.dosing || {};
       html += '<div class="field-row"><div class="field"><label>Label dose (per ref. volume)</label><input id="c-dose" type="number" step="0.1" value="' + (d.labelDose || "") + '"></div>' +
         '<div class="field"><label>Reference volume (L)</label><input id="c-vol" type="number" value="' + (d.referenceVolume || "") + '"></div></div>' +
-        '<div class="field"><label>Unit</label><input id="c-unit" value="' + esc(d.unit || "g") + '"></div>' +
+        '<div class="field-row"><div class="field"><label>Unit (as printed on label)</label><input id="c-unit" value="' + esc(d.unit || "g") + '"></div>' +
+        '<div class="field"><label>Effect of that dose (ppm or pH change, optional)</label><input id="c-effect" type="number" step="0.1" value="' + (d.effect || "") + '"></div></div>' +
+        '<div class="field"><label>Max single treatment (same unit, optional)</label><input id="c-max" type="number" step="0.1" value="' + (d.maxPerTreatment || "") + '"></div>' +
+        '<div class="field"><label>Label directions (verbatim, optional)</label><input id="c-labeltext" value="' + esc(d.labelText || "") + '"></div>' +
         '<div class="field"><label>Notes</label><input id="c-notes" value="' + esc(c.notes || "") + '"></div>' +
         '<div class="btn-row"><button class="btn" data-act="chem-save" data-arg="' + c.id + '">SAVE</button>' +
         '<button class="btn" data-act="chem-cancel">CANCEL</button></div>';
@@ -2736,7 +2873,18 @@ function handleAction(act, el) {
       if (c) {
         c.notes = str("c-notes", "");
         const dose = num("c-dose", 0), vol = num("c-vol", 0);
-        c.dosing = (dose > 0 && vol > 0) ? { labelDose: dose, unit: str("c-unit", "g"), referenceVolume: vol } : null;
+        if (dose > 0 && vol > 0) {
+          // Merge onto the existing dosing object so preloaded fields
+          // the form doesn't edit (e.g. a label dose table) survive.
+          c.dosing = Object.assign({}, c.dosing || {}, {
+            labelDose: dose, unit: str("c-unit", "g"), referenceVolume: vol,
+            effect: num("c-effect", 0) || null,
+            maxPerTreatment: num("c-max", 0) || null,
+            labelText: str("c-labeltext", "")
+          });
+        } else if (!(c.dosing && c.dosing.table)) {
+          c.dosing = null;   // cleared — unless a preloaded table remains
+        }
       }
       ui.editingChem = null; saveState(state); render(); break;
     }

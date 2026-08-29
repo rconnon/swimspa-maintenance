@@ -42,7 +42,7 @@ const S = vm.runInContext(`({
   cycleSummary, trendDirection, detectPatterns, waterChangeAdvice,
   computeDose, findChemical, maintenanceStatus, cloudyWaterAdvice,
   startupInProgress, finalTestOutcome, tooltipHtml, freshFillBalanceStep,
-  bucketInterval, chartPoints, doseLine, trendRangeTests, padSwatchHtml, testValuesHtml, PAD_COLORS
+  bucketInterval, chartPoints, doseLine, trendRangeTests, padSwatchHtml, testValuesHtml, PAD_COLORS, roundDose
 })`, sandbox);
 
 /* ---------------- tiny test runner ---------------- */
@@ -522,6 +522,92 @@ test("Timeline test chips carry swatches and escape text", () => {
   ok(html.includes("reading-chip"), "chips rendered");
   ok((html.match(/pad-swatch/g) || []).length === 2, "one swatch per reading");
   ok(html.includes("FC 3") && html.includes("CYA 30\u201350"), "numbers remain canonical");
+});
+
+console.log("\n== Exact label-dosing engine ==");
+
+const TA_RATE = { labelDose: 20, unit: "g", referenceVolume: 1000, effect: 10,
+  labelText: "Add 20 g per 1,000 L to raise total alkalinity by 10 ppm." };
+const taProduct = d => ({ name: "TA test product", dosing: d });
+const taCtx = cur => ({ param: "alkalinity", current: cur, target: { min: 80, max: 120 }, direction: "raise" });
+
+test("Rate dosing: exact label math scaled to 5,867 L", () => {
+  // 40 → aim 100 is Δ60; label: 20 g raises 10 ppm per 1,000 L
+  // → 20 × (60/10) × 5.867 = 704.04 g → rounded to label-practical 705 g.
+  const d = S.computeDose(taProduct(TA_RATE), S.SPA_PROFILE, taCtx(val(40)));
+  eq(d.amount, 705);
+  eq(d.unit, "g");
+  eq(d.basis, "rate");
+  ok(/20 g per 1,000 L/.test(d.labelText), "label text carried verbatim");
+});
+
+test("Range readings dose from the conservative endpoint", () => {
+  // 40–80 read: dose from 80 (smaller dose) → Δ20 → 20×2×5.867 = 234.68 → 235.
+  const d = S.computeDose(taProduct(TA_RATE), S.SPA_PROFILE, taCtx(range(40, 80)));
+  eq(d.amount, 235);
+  eq(d.usedReading, 80);
+  ok(d.conservative, "flagged as conservative");
+});
+
+test("No dose when the conservative read is already at/inside target", () => {
+  ok(S.computeDose(taProduct(TA_RATE), S.SPA_PROFILE, taCtx(val(120))).noDoseNeeded);
+  ok(S.computeDose(taProduct(TA_RATE), S.SPA_PROFILE, taCtx(range(80, 120))).noDoseNeeded);
+});
+
+test("Label max single treatment caps the dose and never rounds above it", () => {
+  const capped = Object.assign({}, TA_RATE, { maxPerTreatment: 50 }); // 50 g per 1,000 L
+  const d = S.computeDose(taProduct(capped), S.SPA_PROFILE, taCtx(val(40)));
+  const maxScaled = 50 * S.SPA_PROFILE.volumeLitres / 1000; // 293.35
+  ok(d.staged, "flagged as staged");
+  ok(d.amount <= maxScaled, "amount " + d.amount + " must not exceed label max " + maxScaled);
+});
+
+test("Engine refuses a chlorine dose at/above 10 ppm regardless of caller", () => {
+  const fcProduct = { name: "chlorine", dosing: { labelDose: 35, referenceVolume: 1000, effect: 5 } };
+  const d = S.computeDose(fcProduct, S.SPA_PROFILE,
+    { param: "freeChlorine", current: val(10), target: { min: 3, max: 5 }, direction: "raise" });
+  ok(d && d.refuse, "refusal returned");
+});
+
+test("Table dosing: reading-keyed lookup; uncovered readings return null", () => {
+  const phDown = { name: "pH down", dosing: { unit: "g", referenceVolume: 1000,
+    table: { "8.4": 30, "9.0": 45 } } };
+  const ctx = cur => ({ param: "pH", current: cur, target: { min: 7.2, max: 7.8 }, direction: "lower" });
+  const d = S.computeDose(phDown, S.SPA_PROFILE, ctx(val(8.4)));
+  eq(d.amount, 175);            // 30 × 5.867 = 176.01 → 175
+  eq(d.basis, "table");
+  // Lowering from a 7.8–8.4 range: conservative endpoint is 7.8, which
+  // the label table doesn't cover → no invented dose.
+  eq(S.computeDose(phDown, S.SPA_PROFILE, ctx(range(7.8, 8.4))), null);
+});
+
+test("CYA contribution surfaces only from label-stated data", () => {
+  const chlor = { name: "chlorine", dosing: { labelDose: 35, referenceVolume: 1000, effect: 5, cyaPerDose: 3 } };
+  const ctx = { param: "freeChlorine", current: val(1), target: { min: 3, max: 5 }, direction: "raise" };
+  const d = S.computeDose(chlor, S.SPA_PROFILE, ctx);
+  // Δ3 → 35×0.6×5.867 = 123.2 → 125 g; CYA = 3 × (125/5.867)/35 ≈ 1.8 ppm
+  eq(d.amount, 125);
+  eq(d.addsCya, 1.8);
+  const noCya = { name: "chlorine", dosing: { labelDose: 35, referenceVolume: 1000, effect: 5 } };
+  ok(S.computeDose(noCya, S.SPA_PROFILE, ctx).addsCya === undefined, "no invented CYA figure");
+});
+
+test("Migration: existing installs adopt factory label data unless user-configured", () => {
+  // Simulate factory data arriving in an update while a device already
+  // has the inventory stored with dosing: null.
+  vm.runInContext('DEFAULT_CHEMICALS.find(c => c.id === "aqua_shock").dosing = { labelDose: 15, unit: "g", referenceVolume: 1000 }', sandbox);
+  try {
+    const st = freshState();
+    const stored = JSON.parse(JSON.stringify(st));
+    stored.chemicalInventory.find(c => c.id === "aqua_shock").dosing = null;
+    stored.chemicalInventory.find(c => c.id === "piper_cal").dosing = { labelDose: 99, unit: "g", referenceVolume: 500 };
+    S.saveState(stored);
+    const back = S.loadState();
+    eq(back.chemicalInventory.find(c => c.id === "aqua_shock").dosing.labelDose, 15, "factory dosing adopted");
+    eq(back.chemicalInventory.find(c => c.id === "piper_cal").dosing.labelDose, 99, "user config preserved");
+  } finally {
+    vm.runInContext('DEFAULT_CHEMICALS.find(c => c.id === "aqua_shock").dosing = null', sandbox);
+  }
 });
 
 /* ---------------- summary ---------------- */
