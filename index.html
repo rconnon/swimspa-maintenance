@@ -358,9 +358,9 @@ const PAD_COLORS = {
 // Rob's containers, Aug 2026). All six products are Lawrason's; the
 // balancers are their "Pool Life" brand (the app previously guessed
 // "Piper Clear"). Reference volume on every label is 10,000 L; only
-// volume scaling to this spa is computed. pH Down and Cal directions
-// were printed in French on the photographed panels — labelText is a
-// faithful translation.
+// volume scaling to this spa is computed. Every labelText below is the
+// English label wording verbatim (pH Down and Cal were first read from
+// the French panel, then verified against the English panel photos).
 const DEFAULT_CHEMICALS = [
   { id: "piper_alk_buffer", name: "Pool Life Alk+ Buffer", role: "alkalinity increaser",
     type: "alkalinity buffer (sodium bicarbonate)", configured: true, purpose: "Raises total alkalinity.",
@@ -369,7 +369,7 @@ const DEFAULT_CHEMICALS = [
   { id: "piper_ph_down", name: "Pool Life pH Down", role: "pH decreaser",
     type: "pH reducer (sodium bisulphate)", configured: true, purpose: "Lowers pH.",
     dosing: { labelDose: 100, unit: "g", referenceVolume: 10000,
-      labelText: "When pH is above 7.8, add 100 g of POOL LIFE pH DOWN per 10,000 L of water. Check pH every 2 hours; repeat dose and check until pH is between 7.2 and 7.8." } },
+      labelText: "Add 100 g of POOL LIFE pH DOWN for each 10,000 L of pool water when pH goes above 7.8. Test every 2 hours. Repeat dose and procedure until a pH of 7.2 to 7.8 is reached." } },
   { id: "aqua_granular", name: "Aqua Granular", role: "routine sanitizer",
     type: "stabilized chlorine granules", configured: true,
     purpose: "Stabilized chlorine sanitizer — adds CYA with every dose.",
@@ -378,7 +378,7 @@ const DEFAULT_CHEMICALS = [
   { id: "piper_cal", name: "Pool Life Cal", role: "hardness increaser",
     type: "calcium hardness increaser (calcium chloride)", configured: true, purpose: "Raises calcium hardness.",
     dosing: { labelDose: 112, unit: "g", referenceVolume: 10000, effect: 10,
-      labelText: "Increase total hardness by 10 ppm with 112 g of POOL LIFE CAL per 10,000 L. Premix at 1 kg per 10 litres of water in a plastic pail." } },
+      labelText: "If hardness is less than the desired range, add 112 g of POOL LIFE CAL per 10,000 L to raise total hardness by 10 ppm. Pre-dissolve the required amount in a plastic pail, 1 kg per 10 litres of water." } },
   { id: "aqua_shock", name: "Aqua Shock", role: "oxidizer",
     type: "chlorinating shock", configured: true, purpose: "Chlorinating shock / oxidation.",
     dosing: { labelDose: 150, unit: "g", referenceVolume: 10000,
