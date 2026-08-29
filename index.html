@@ -354,20 +354,39 @@ const PAD_COLORS = {
 // Chemical inventory (all products the user already owns). Doses are
 // NEVER hardcoded — a dose is only calculated once the actual
 // product-label numbers are configured in Settings.
+// Dosing data transcribed from the actual product labels (photos of
+// Rob's containers, Aug 2026). All six products are Lawrason's; the
+// balancers are their "Pool Life" brand (the app previously guessed
+// "Piper Clear"). Reference volume on every label is 10,000 L; only
+// volume scaling to this spa is computed. pH Down and Cal directions
+// were printed in French on the photographed panels — labelText is a
+// faithful translation.
 const DEFAULT_CHEMICALS = [
-  { id: "piper_alk_buffer", name: "Piper Clear Alk+ Buffer", role: "alkalinity increaser",
-    type: "alkalinity buffer", configured: true, purpose: "Raises total alkalinity.", dosing: null },
-  { id: "piper_ph_down", name: "Piper Clear pH Down", role: "pH decreaser",
-    type: "pH reducer", configured: true, purpose: "Lowers pH.", dosing: null },
+  { id: "piper_alk_buffer", name: "Pool Life Alk+ Buffer", role: "alkalinity increaser",
+    type: "alkalinity buffer (sodium bicarbonate)", configured: true, purpose: "Raises total alkalinity.",
+    dosing: { labelDose: 180, unit: "g", referenceVolume: 10000, effect: 10, aim: 100,
+      labelText: "180 g of POOL LIFE ALK+BUFFER will raise the total alkalinity of 10,000 L of pool water by 10 ppm. Wait at least 2 hours after addition before taking a reading." } },
+  { id: "piper_ph_down", name: "Pool Life pH Down", role: "pH decreaser",
+    type: "pH reducer (sodium bisulphate)", configured: true, purpose: "Lowers pH.",
+    dosing: { labelDose: 100, unit: "g", referenceVolume: 10000,
+      labelText: "When pH is above 7.8, add 100 g of POOL LIFE pH DOWN per 10,000 L of water. Check pH every 2 hours; repeat dose and check until pH is between 7.2 and 7.8." } },
   { id: "aqua_granular", name: "Aqua Granular", role: "routine sanitizer",
     type: "stabilized chlorine granules", configured: true,
-    purpose: "Stabilized chlorine sanitizer — adds CYA with every dose.", dosing: null },
-  { id: "piper_cal", name: "Piper Clear Cal", role: "hardness increaser",
-    type: "calcium hardness increaser", configured: true, purpose: "Raises calcium hardness.", dosing: null },
+    purpose: "Stabilized chlorine sanitizer — adds CYA with every dose.",
+    dosing: { labelDose: 40, unit: "g", referenceVolume: 10000,
+      labelText: "Maintain proper chlorine residual by broadcasting daily over the surface, 40 g of AQUA GRANULAR per 10,000 L of pool water, or as needed. Contains stabilizer which can accumulate — keep stabilizer within 30-100 ppm by dilution with fresh water." } },
+  { id: "piper_cal", name: "Pool Life Cal", role: "hardness increaser",
+    type: "calcium hardness increaser (calcium chloride)", configured: true, purpose: "Raises calcium hardness.",
+    dosing: { labelDose: 112, unit: "g", referenceVolume: 10000, effect: 10,
+      labelText: "Increase total hardness by 10 ppm with 112 g of POOL LIFE CAL per 10,000 L. Premix at 1 kg per 10 litres of water in a plastic pail." } },
   { id: "aqua_shock", name: "Aqua Shock", role: "oxidizer",
-    type: "chlorinating shock", configured: true, purpose: "Chlorinating shock / oxidation.", dosing: null },
+    type: "chlorinating shock", configured: true, purpose: "Chlorinating shock / oxidation.",
+    dosing: { labelDose: 150, unit: "g", referenceVolume: 10000,
+      labelText: "Superchlorinate weekly using 150 g of AQUA SHOCK per 10,000 L of pool water when average daily temperature is 25-32\u00b0C; otherwise every other week. Predissolve (concentration not exceeding 1 kg per 10 L); always add chemical to water, NEVER water to chemical." } },
   { id: "aqua_ph_plus", name: "Aqua pH+ Plus", role: "pH increaser",
-    type: "pH increaser", configured: true, purpose: "Raises pH.", dosing: null },
+    type: "pH increaser (sodium carbonate)", configured: true, purpose: "Raises pH.",
+    dosing: { labelDose: 100, unit: "g", referenceVolume: 10000,
+      labelText: "Add 100 g of AQUA PH PLUS for each 10,000 L of pool water when pH drops below 7.2. Test every 2 hours. Repeat dose and procedure until a pH of 7.2 to 7.8 is reached." } },
   { id: "easytest_7in1", name: "EasyTest 7-in-1 Test Strips", role: "testing",
     type: "test strips", configured: true, purpose: "Water testing.", dosing: null }
 ];
@@ -462,6 +481,9 @@ function loadState() {
       const s = stored.find(x => x.id === f.id);
       if (!s) return f;
       if (s.dosing == null && f.dosing != null) s.dosing = f.dosing;
+      // Name/type/purpose aren't user-editable — always track the factory
+      // values (fixes the earlier "Piper Clear" naming on old installs).
+      s.name = f.name; s.type = f.type; s.purpose = f.purpose; s.role = f.role;
       return s;
     }).concat(stored.filter(s => !factory.some(f => f.id === s.id)));
     return merged;
@@ -805,7 +827,7 @@ function diagnose(values, targets, context) {
     if (iv && iv.hi <= 100) {
       actions.push({ priority: 4, severity: "info", parameter: "hardness",
         title: "Hardness appears low",
-        message: "Consider raising calcium hardness with Piper Clear Cal, using label-based dosing." });
+        message: "Consider raising calcium hardness with Pool Life Cal, using label-based dosing." });
     } else if (iv && iv.lo >= 500) {
       actions.push({ priority: 4, severity: "info", parameter: "hardness",
         title: "Hardness is high",
@@ -1994,10 +2016,10 @@ function freshFillBalanceStep(step, now) {
       html += '<p class="tl-detail" style="margin:8px 0">Hardness is high. <b>Do not add hardness increaser.</b> High hardness is usually addressed at the next water change.</p></div>' +
         '<button class="btn btn-primary" data-act="ff-advance" data-arg="chlorine">CONTINUE</button>';
     } else {
-      html += '<p class="tl-detail" style="margin:8px 0">Hardness appears low. Use <b>Piper Clear Cal</b> with label-based dosing only.</p>' +
+      html += '<p class="tl-detail" style="margin:8px 0">Hardness appears low. Use <b>Pool Life Cal</b> with label-based dosing only.</p>' +
         doseLine("hardness increaser", { param: "hardness", current: r ? r.value : null,
           target: state.targets.hardness, direction: "raise" }) + "</div>" +
-        '<button class="btn" data-act="ff-added" data-param="hardness" data-product="piper_cal">I ADDED PIPER CLEAR CAL</button>' +
+        '<button class="btn" data-act="ff-added" data-param="hardness" data-product="piper_cal">I ADDED POOL LIFE CAL</button>' +
         '<button class="btn btn-primary" data-act="ff-retest" data-param="hardness">RETEST HARDNESS</button>' +
         '<button class="btn-quiet" data-act="ff-skip" data-arg="chlorine">Skip for now</button>';
     }

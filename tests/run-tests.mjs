@@ -595,19 +595,47 @@ test("CYA contribution surfaces only from label-stated data", () => {
 test("Migration: existing installs adopt factory label data unless user-configured", () => {
   // Simulate factory data arriving in an update while a device already
   // has the inventory stored with dosing: null.
-  vm.runInContext('DEFAULT_CHEMICALS.find(c => c.id === "aqua_shock").dosing = { labelDose: 15, unit: "g", referenceVolume: 1000 }', sandbox);
-  try {
-    const st = freshState();
-    const stored = JSON.parse(JSON.stringify(st));
-    stored.chemicalInventory.find(c => c.id === "aqua_shock").dosing = null;
-    stored.chemicalInventory.find(c => c.id === "piper_cal").dosing = { labelDose: 99, unit: "g", referenceVolume: 500 };
-    S.saveState(stored);
-    const back = S.loadState();
-    eq(back.chemicalInventory.find(c => c.id === "aqua_shock").dosing.labelDose, 15, "factory dosing adopted");
-    eq(back.chemicalInventory.find(c => c.id === "piper_cal").dosing.labelDose, 99, "user config preserved");
-  } finally {
-    vm.runInContext('DEFAULT_CHEMICALS.find(c => c.id === "aqua_shock").dosing = null', sandbox);
-  }
+  const st = freshState();
+  const stored = JSON.parse(JSON.stringify(st));
+  stored.chemicalInventory.find(c => c.id === "aqua_shock").dosing = null;      // pre-label install
+  stored.chemicalInventory.find(c => c.id === "aqua_shock").name = "Aqua Shock";
+  stored.chemicalInventory.find(c => c.id === "piper_cal").dosing = { labelDose: 99, unit: "g", referenceVolume: 500 };
+  stored.chemicalInventory.find(c => c.id === "piper_cal").name = "Piper Clear Cal";  // old guessed name
+  S.saveState(stored);
+  const back = S.loadState();
+  eq(back.chemicalInventory.find(c => c.id === "aqua_shock").dosing.labelDose, 150, "factory label dosing adopted");
+  eq(back.chemicalInventory.find(c => c.id === "piper_cal").dosing.labelDose, 99, "user dosing config preserved");
+  eq(back.chemicalInventory.find(c => c.id === "piper_cal").name, "Pool Life Cal", "factory name adopted over old guess");
+});
+
+
+test("Preloaded label data: exact doses for the XL4 (5,867 L)", () => {
+  const st = freshState();
+  const by = id => st.chemicalInventory.find(c => c.id === id);
+  // Pool Life Alk+ Buffer: 180 g / 10 ppm / 10,000 L, label aim 100 ppm.
+  // TA 40 → Δ60 → 180 × 6 × 0.5867 = 633.6 → 635 g.
+  const alk = S.computeDose(by("piper_alk_buffer"), S.SPA_PROFILE,
+    { param: "alkalinity", current: val(40), target: { min: 80, max: 120 }, direction: "raise" });
+  eq(alk.amount, 635); eq(alk.aim, 100);
+  // Pool Life Cal: 112 g / 10 ppm / 10,000 L. CH 100 → aim 200 → Δ100
+  // → 112 × 10 × 0.5867 = 657.1 → 655 g.
+  const cal = S.computeDose(by("piper_cal"), S.SPA_PROFILE,
+    { param: "hardness", current: val(100, true), target: { min: 150, max: 250 }, direction: "raise" });
+  eq(cal.amount, 655);
+  // Flat repeat-dose products scale 10,000 L → 5,867 L:
+  eq(S.computeDose(by("piper_ph_down"), S.SPA_PROFILE).amount, 58.7);
+  eq(S.computeDose(by("aqua_ph_plus"), S.SPA_PROFILE).amount, 58.7);
+  eq(S.computeDose(by("aqua_shock"), S.SPA_PROFILE).amount, 88);
+  eq(S.computeDose(by("aqua_granular"), S.SPA_PROFILE).amount, 23.5);
+  // Label text rides along verbatim.
+  ok(/Wait at least 2 hours/.test(alk.labelText));
+});
+
+test("Corrected product names: Pool Life brand (was 'Piper Clear' guess)", () => {
+  const st = freshState();
+  eq(st.chemicalInventory.find(c => c.id === "piper_alk_buffer").name, "Pool Life Alk+ Buffer");
+  eq(st.chemicalInventory.find(c => c.id === "piper_ph_down").name, "Pool Life pH Down");
+  eq(st.chemicalInventory.find(c => c.id === "piper_cal").name, "Pool Life Cal");
 });
 
 /* ---------------- summary ---------------- */
