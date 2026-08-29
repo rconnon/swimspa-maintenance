@@ -150,6 +150,12 @@ svg { display: block; max-width: 100%; }
 .tile.sel { border-color: var(--accent); background: var(--info-bg); }
 .tile.dim { opacity: 0.35; }
 
+/* Inline pad-color swatch shown beside logged readings (result screen,
+   timeline). A between-two-colors read renders as a split swatch. */
+.pad-swatch { display: inline-block; width: 14px; height: 14px; border-radius: 4px;
+  border: 1px solid var(--border); vertical-align: -2px; margin-right: 5px; flex: none; }
+.reading-chip { display: inline-flex; align-items: center; margin: 2px 12px 2px 0; white-space: nowrap; }
+
 /* ============ TIMER ============ */
 .timer-wrap { text-align: center; padding: 30px 0; }
 .timer-num { font-size: 72px; font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -634,6 +640,31 @@ function formatValue(param, v) {
   if (iv.approximate && iv.lo !== iv.hi) return (param === "cya" ? "" : "~") + iv.lo + "–" + iv.hi + unit;
   const prefix = (param === "hardness" || iv.approximate) ? "~" : "";
   return prefix + iv.lo + unit;
+}
+
+// Inline swatch showing the pad color the user matched during the test.
+// An exact read shows its bucket color; a between-two-colors read (or a
+// merged range) shows a split swatch of the outer buckets. Decorative —
+// the number stays the canonical channel; empty string when no bucket
+// color is known for this reading.
+function padSwatchHtml(param, v, kitId) {
+  const kit = TEST_KITS[kitId] || (typeof state !== "undefined" && state ? TEST_KITS[state.testKit] : null);
+  const def = kit && kit.parameters ? kit.parameters[param] : null;
+  const colors = PAD_COLORS[param];
+  const iv = asInterval(v);
+  if (!def || !colors || !iv) return "";
+  const key = b => (typeof b === "number" ? String(b) : "30-50");
+  // Buckets fully inside the stored interval: one for an exact read,
+  // the outer pair for a between-two-colors range.
+  const hit = def.values.filter(b => {
+    const biv = bucketInterval(b);
+    return biv.lo >= iv.lo && biv.hi <= iv.hi;
+  });
+  if (!hit.length) return "";
+  const c1 = colors[key(hit[0])], c2 = colors[key(hit[hit.length - 1])];
+  if (!c1 || !c2) return "";
+  const bg = c1 === c2 ? c1 : "linear-gradient(90deg," + c1 + " 50%," + c2 + " 50%)";
+  return '<span class="pad-swatch" style="background:' + bg + '" title="pad color matched on the strip"></span>';
 }
 
 /* ---------- Latest readings & freshness ---------- */
@@ -1571,7 +1602,8 @@ function renderResult(ev) {
   DASH_ORDER.forEach(p => {
     if (values[p] == null) return;
     const info = interpretParam(p, values[p], state.targets);
-    rows += '<div class="result-row"><span>' + PARAM_LABELS[p] + "</span><span><b>" + formatValue(p, values[p]) + "</b> " +
+    rows += '<div class="result-row"><span>' + PARAM_LABELS[p] + "</span><span>" +
+      padSwatchHtml(p, values[p], ev.data.testKit) + "<b>" + formatValue(p, values[p]) + "</b> " +
       statusBadge(info.status, info.label) + "</span></div>";
   });
   const cc = combinedChlorine(values.freeChlorine, values.totalChlorine);
@@ -1876,7 +1908,8 @@ function finalCheckTable() {
     const r = latestReading(state, p);
     if (!r) return;
     const info = interpretParam(p, r.value, state.targets);
-    rows += '<div class="result-row"><span>' + PARAM_LABELS[p] + "</span><span><b>" + formatValue(p, r.value) + "</b> " +
+    rows += '<div class="result-row"><span>' + PARAM_LABELS[p] + "</span><span>" +
+      padSwatchHtml(p, r.value, r.test.data.testKit) + "<b>" + formatValue(p, r.value) + "</b> " +
       statusBadge(info.status, info.label) + "</span></div>";
   });
   return rows;
@@ -2255,23 +2288,30 @@ function eventTitle(ev) {
   }
 }
 
-function eventDetail(ev) {
-  if (ev.type === "water_test" && ev.data.values) {
-    const short = { freeChlorine: "FC", totalChlorine: "TC", pH: "pH", alkalinity: "TA", hardness: "CH", cya: "CYA" };
-    const parts = [];
-    DASH_ORDER.forEach(p => {
-      if (ev.data.values[p] != null) parts.push(short[p] + ": " + formatValue(p, ev.data.values[p]).replace(" ppm", ""));
-    });
-    let s = parts.join(" · ");
-    const modeTxt = (MODES[ev.data.operatingMode] || {}).label;
-    if (modeTxt) s += "\n" + modeTxt + " · " + (ev.data.waterTemperatureF || "?") + "°F";
-    if (ev.data.observations) {
-      const o = ev.data.observations;
-      const flags = Object.keys(o).filter(k => !["clear", "none", "normal"].includes(o[k])).map(k => o[k]);
-      if (flags.length) s += "\n" + flags.join(", ");
-    }
-    return s;
+// Rich reading chips for logged tests: each parameter shows the pad
+// color the user matched on the strip beside the number.
+function testValuesHtml(ev) {
+  const short = { freeChlorine: "FC", totalChlorine: "TC", pH: "pH", alkalinity: "TA", hardness: "CH", cya: "CYA" };
+  let s = '<div class="tl-detail">';
+  DASH_ORDER.forEach(p => {
+    if (ev.data.values[p] == null) return;
+    s += '<span class="reading-chip">' + padSwatchHtml(p, ev.data.values[p], ev.data.testKit) +
+      short[p] + " " + esc(formatValue(p, ev.data.values[p]).replace(" ppm", "")) + "</span>";
+  });
+  s += "</div>";
+  const extra = [];
+  const modeTxt = (MODES[ev.data.operatingMode] || {}).label;
+  if (modeTxt) extra.push(modeTxt + " · " + (ev.data.waterTemperatureF || "?") + "°F");
+  if (ev.data.observations) {
+    const o = ev.data.observations;
+    const flags = Object.keys(o).filter(k => !["clear", "none", "normal"].includes(o[k])).map(k => o[k]);
+    if (flags.length) extra.push(flags.join(", "));
   }
+  if (extra.length) s += '<div class="tl-detail">' + esc(extra.join(" · ")) + "</div>";
+  return s;
+}
+
+function eventDetail(ev) {
   if (ev.type === "swim_session") {
     const cls = loadClass(ev);
     return (cls !== "normal" ? cls + " load · " : "") + (ev.data.waterTemperatureF || "?") + "°F";
@@ -2297,7 +2337,8 @@ function viewTimeline() {
     html += '<div class="tl-item"><span class="tl-icon">' + (EVENT_GLYPHS[ev.type] || (ev.type === "water_test" ? "🧪" : "📝")) + "</span>" +
       '<div class="tl-body"><div class="tl-when">' + fmtDate(ev.timestamp, true) + "</div>" +
       '<div class="tl-title">' + esc(eventTitle(ev)) + "</div>" +
-      (eventDetail(ev) ? '<div class="tl-detail">' + esc(eventDetail(ev)) + "</div>" : "") +
+      (ev.type === "water_test" && ev.data.values ? testValuesHtml(ev) :
+        eventDetail(ev) ? '<div class="tl-detail">' + esc(eventDetail(ev)) + "</div>" : "") +
       (ev.notes ? '<div class="tl-detail">📝 ' + esc(ev.notes) + "</div>" : "") + "</div></div>";
   });
   html += "</div>" +

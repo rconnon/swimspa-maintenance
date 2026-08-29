@@ -42,7 +42,7 @@ const S = vm.runInContext(`({
   cycleSummary, trendDirection, detectPatterns, waterChangeAdvice,
   computeDose, findChemical, maintenanceStatus, cloudyWaterAdvice,
   startupInProgress, finalTestOutcome, tooltipHtml, freshFillBalanceStep,
-  bucketInterval, chartPoints, doseLine, trendRangeTests
+  bucketInterval, chartPoints, doseLine, trendRangeTests, padSwatchHtml, testValuesHtml, PAD_COLORS
 })`, sandbox);
 
 /* ---------------- tiny test runner ---------------- */
@@ -485,6 +485,43 @@ test("Previous-cycle trend range returns only the prior cycle's tests", () => {
   const prev = vm.runInContext('trendRangeTests("prev", new Date("2026-08-29T12:00:00"))', sandbox);
   eq(prev.length, 1, "one test in the previous cycle");
   eq(prev[0].localDate, "2026-06-05");
+});
+
+
+console.log("\n== Result swatches ==");
+
+test("Exact readings show their single matched pad color", () => {
+  const html = S.padSwatchHtml("freeChlorine", val(3), "easytest_7in1");
+  ok(html.includes(S.PAD_COLORS.freeChlorine[3]), "FC 3 bucket color used");
+  ok(html.includes("pad-swatch"), "renders the swatch span");
+});
+
+test("Between-two-colors readings show a split swatch of both buckets", () => {
+  const html = S.padSwatchHtml("alkalinity", range(80, 120), "easytest_7in1");
+  ok(html.includes("linear-gradient"), "split swatch");
+  ok(html.includes(S.PAD_COLORS.alkalinity[80]) && html.includes(S.PAD_COLORS.alkalinity[120]),
+     "both bucket colors present");
+});
+
+test("CYA 30-50 bucket shows its own single pad color", () => {
+  const html = S.padSwatchHtml("cya", range(30, 50), "easytest_7in1");
+  ok(!html.includes("linear-gradient"), "native bucket is one pad, not a split");
+  ok(html.includes(S.PAD_COLORS.cya["30-50"]));
+});
+
+test("Readings with no matching bucket render no swatch", () => {
+  eq(S.padSwatchHtml("freeChlorine", val(2), "easytest_7in1"), "", "2 ppm is not a strip bucket");
+  eq(S.padSwatchHtml("nope", val(3), "easytest_7in1"), "", "unknown parameter");
+});
+
+test("Timeline test chips carry swatches and escape text", () => {
+  const st = freshState();
+  const ev = addTest(st, "2026-08-29T09:00:00", { freeChlorine: val(3), cya: range(30, 50) });
+  vm.runInContext("state = " + JSON.stringify(st), sandbox);
+  const html = vm.runInContext("testValuesHtml(state.events[0])", sandbox);
+  ok(html.includes("reading-chip"), "chips rendered");
+  ok((html.match(/pad-swatch/g) || []).length === 2, "one swatch per reading");
+  ok(html.includes("FC 3") && html.includes("CYA 30\u201350"), "numbers remain canonical");
 });
 
 /* ---------------- summary ---------------- */
