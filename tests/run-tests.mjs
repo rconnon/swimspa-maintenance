@@ -698,6 +698,23 @@ test("Logged tests reopen from History with recommendations intact", () => {
   ok(html.includes("BACK TO HISTORY"), "returns to History");
 });
 
+
+test("Historical reopen doses from that test's readings, with staleness warning", () => {
+  const st = freshState();
+  addTest(st, "2026-08-20T09:00:00", { freeChlorine: val(3), alkalinity: val(40) });   // old: TA 40
+  addTest(st, "2026-08-28T09:00:00", { freeChlorine: val(3), alkalinity: val(80) });   // newer: in range
+  vm.runInContext("state = " + JSON.stringify(st), sandbox);
+  const html = vm.runInContext("resultHtml(state.events[0], true)", sandbox);
+  ok(html.includes("635 g"), "dose computed from the reopened test's TA 40, not the newer 80");
+  ok(/newer reading exists/i.test(html), "warns that newer readings exist before adding anything");
+});
+
+test("Mobile zoom is locked (viewport + touch-action + iOS gesture guard)", () => {
+  ok(html.includes("maximum-scale=1") && html.includes("user-scalable=no"), "viewport disallows scaling");
+  ok(/touch-action: pan-y/.test(html), "touch-action blocks pinch while keeping scroll");
+  ok(html.includes("gesturestart"), "iOS gesture events prevented");
+});
+
 /* ---------------- summary ---------------- */
 console.log("\n" + passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

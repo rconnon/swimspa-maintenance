@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#f9f9f7" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)">
 <title>Vita Spa XL4 Water Manager</title>
@@ -76,6 +76,9 @@ body {
   color: var(--ink);
   line-height: 1.45;
   padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
+  /* Pinch/double-tap zoom breaks the fixed tab bar and chart taps on
+     mobile — allow vertical panning only. */
+  touch-action: pan-y;
 }
 button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 input, select, textarea { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--hairline); border-radius: 10px; padding: 10px 12px; width: 100%; }
@@ -1756,8 +1759,14 @@ function resultHtml(ev, fromHistory) {
   }
   if (actions.length > 0) {
     const a = actions[0];
+    const newerExists = fromHistory && a.parameter !== "combined" && (function () {
+      const latest = latestReading(state, a.parameter);
+      return latest && latest.test.timestamp > ev.timestamp;
+    })();
     html += '<div class="card"><h3>Do this first</h3><div class="tl-title">' + esc(a.title) + "</div>" +
-      '<div class="tl-detail">' + esc(a.message || "") + "</div>" + actionDoseLine(a) + whyBlock(a.parameter);
+      '<div class="tl-detail">' + esc(a.message || "") + "</div>" + actionDoseLine(a, values) +
+      (newerExists ? '<div class="tl-detail" style="margin-top:6px">⚠ A newer reading exists for this parameter — this guidance reflects the reopened test. Check Today (or retest) before adding anything.</div>' : "") +
+      whyBlock(a.parameter);
     if (!a.retestOnly && !a.doNotAdd && ["alkalinity", "pH", "hardness", "freeChlorine"].includes(a.parameter))
       html += '<button class="btn btn-primary" style="margin-top:10px" data-act="chem-action" data-arg="' + a.parameter + '">VIEW ACTION</button>';
     if (a.parameter !== "combined" && a.parameter !== "cya")
@@ -1795,17 +1804,21 @@ function roleForCorrection(param, direction) {
 // Inline dose guidance for a diagnostic action — used on the Today
 // action card and the test-result screen so the computed amount is
 // visible without tapping through to the action screen.
-function actionDoseLine(action) {
+function actionDoseLine(action, values) {
   if (!action || action.retestOnly || action.doNotAdd) return "";
   const param = action.parameter;
-  const r = latestReading(state, param);
+  // Dose from the same readings the diagnosis used: the rendered view's
+  // values (historical when reopened from History), falling back to the
+  // latest reading on live views.
+  const cur = values && values[param] != null ? values[param]
+    : (latestReading(state, param) || {}).value;
   const t = state.targets[param];
-  if (!r || !t || t.min == null) return "";
-  const rs = rangeStatus(r.value, t.min, t.max);
+  if (cur == null || !t || t.min == null) return "";
+  const rs = rangeStatus(cur, t.min, t.max);
   const direction = rs === "high" ? "lower" : "raise";
   const role = roleForCorrection(param, direction);
   if (!role) return "";
-  return doseLine(role, { param, current: r.value, target: t, direction });
+  return doseLine(role, { param, current: cur, target: t, direction });
 }
 
 function viewChemAction(param) {
@@ -2999,6 +3012,10 @@ function handleAction(act, el) {
    ============================================================ */
 if (typeof document !== "undefined" && document.getElementById) {
   state = loadState();
+  // iOS Safari ignores user-scalable=no; preventing its proprietary
+  // gesture events is what actually stops pinch-zoom there.
+  ["gesturestart", "gesturechange", "gestureend"].forEach(t =>
+    document.addEventListener(t, e => e.preventDefault(), { passive: false }));
   document.addEventListener("click", function (e) {
     const el = e.target.closest && e.target.closest("[data-act]");
     if (el) handleAction(el.getAttribute("data-act"), el);
