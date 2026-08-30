@@ -1479,6 +1479,7 @@ function actionCard(now) {
     html += '<div class="tl-title">Do this first: ' + esc(a.title) + "</div>" +
       '<div class="tl-detail">' + esc(a.message || "") + "</div>" +
       (r ? '<div class="stat-sub" style="margin-top:6px">Current: ' + formatValue(a.parameter, r.value) + "</div>" : "") +
+      actionDoseLine(a) +
       whyBlock(a.parameter);
     if (!a.retestOnly && !a.doNotAdd && ["alkalinity", "pH", "hardness", "freeChlorine"].includes(a.parameter)) {
       html += '<button class="btn" style="margin-top:10px" data-act="chem-action" data-arg="' + a.parameter + '">VIEW ACTION</button>';
@@ -1734,7 +1735,7 @@ function renderResult(ev) {
   if (actions.length > 0) {
     const a = actions[0];
     html += '<div class="card"><h3>Do this first</h3><div class="tl-title">' + esc(a.title) + "</div>" +
-      '<div class="tl-detail">' + esc(a.message || "") + "</div>" + whyBlock(a.parameter);
+      '<div class="tl-detail">' + esc(a.message || "") + "</div>" + actionDoseLine(a) + whyBlock(a.parameter);
     if (!a.retestOnly && !a.doNotAdd && ["alkalinity", "pH", "hardness", "freeChlorine"].includes(a.parameter))
       html += '<button class="btn btn-primary" style="margin-top:10px" data-act="chem-action" data-arg="' + a.parameter + '">VIEW ACTION</button>';
     if (a.parameter !== "combined" && a.parameter !== "cya")
@@ -1755,6 +1756,33 @@ function renderResult(ev) {
 /* ============================================================
    CHEMICAL ACTION SCREEN
    ============================================================ */
+// Which product corrects a parameter in a given direction. Returns
+// null when no product applies (high alkalinity is lowered by
+// procedure, never dosed up; combined/CYA have no dosing product).
+function roleForCorrection(param, direction) {
+  if (param === "alkalinity") return direction === "lower" ? null : "alkalinity increaser";
+  if (param === "pH") return direction === "lower" ? "pH decreaser" : "pH increaser";
+  if (param === "hardness") return "hardness increaser";
+  if (param === "freeChlorine") return "routine sanitizer";
+  return null;
+}
+
+// Inline dose guidance for a diagnostic action — used on the Today
+// action card and the test-result screen so the computed amount is
+// visible without tapping through to the action screen.
+function actionDoseLine(action) {
+  if (!action || action.retestOnly || action.doNotAdd) return "";
+  const param = action.parameter;
+  const r = latestReading(state, param);
+  const t = state.targets[param];
+  if (!r || !t || t.min == null) return "";
+  const rs = rangeStatus(r.value, t.min, t.max);
+  const direction = rs === "high" ? "lower" : "raise";
+  const role = roleForCorrection(param, direction);
+  if (!role) return "";
+  return doseLine(role, { param, current: r.value, target: t, direction });
+}
+
 // Dose cell for the chem-action screen. Handles every computeDose
 // outcome; all label-sourced fields are escaped (user-editable).
 function doseText(dose, ctx, vol) {
@@ -2048,6 +2076,9 @@ function doseLine(role, ctx) {
     if (dose.basis !== "flat" && dose.usedReading != null) {
       s += " — per the label, for a " + (ctx && ctx.direction === "lower" ? "reduction" : "rise") +
         " from ~" + dose.usedReading + (dose.aim != null ? " toward ~" + dose.aim : "") + ". Add, circulate, retest.";
+    }
+    if (dose.basis === "flat" && ctx) {
+      s += " — the label doses this product per treatment, not per point: add this amount, circulate, retest, and repeat until the reading is in range (further out = more rounds).";
     }
     if (dose.staged) s += " This is the label's maximum single treatment — repeat after retesting.";
     if (dose.conservative) s += " Reading was a range, so this doses from the conservative end to avoid overshoot.";
