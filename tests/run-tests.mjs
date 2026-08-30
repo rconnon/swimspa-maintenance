@@ -42,7 +42,8 @@ const S = vm.runInContext(`({
   cycleSummary, trendDirection, detectPatterns, waterChangeAdvice,
   computeDose, findChemical, maintenanceStatus, cloudyWaterAdvice,
   startupInProgress, finalTestOutcome, tooltipHtml, freshFillBalanceStep,
-  bucketInterval, chartPoints, doseLine, trendRangeTests, padSwatchHtml, testValuesHtml, PAD_COLORS, roundDose
+  bucketInterval, chartPoints, doseLine, trendRangeTests, padSwatchHtml, testValuesHtml, PAD_COLORS, roundDose,
+  doseBlockHtml, actionDoseLine, roleForCorrection, actionCard, resultHtml, viewTimeline
 })`, sandbox);
 
 /* ---------------- tiny test runner ---------------- */
@@ -644,6 +645,57 @@ test("Corrected product names: Pool Life brand (was 'Piper Clear' guess)", () =>
   eq(st.chemicalInventory.find(c => c.id === "piper_alk_buffer").name, "Pool Life Alk+ Buffer");
   eq(st.chemicalInventory.find(c => c.id === "piper_ph_down").name, "Pool Life pH Down");
   eq(st.chemicalInventory.find(c => c.id === "piper_cal").name, "Pool Life Cal");
+});
+
+
+console.log("\n== Dose display structure ==");
+
+test("Dose block separates the computed amount from the label quote", () => {
+  const st = freshState();
+  addTest(st, "2026-08-29T09:00:00", { alkalinity: val(40) });
+  vm.runInContext("state = " + JSON.stringify(st), sandbox);
+  const html = vm.runInContext(
+    'doseLine("alkalinity increaser", { param: "alkalinity", current: {value:40}, target: state.targets.alkalinity, direction: "raise" })', sandbox);
+  ok(html.includes("dose-amount"), "amount block present");
+  ok(html.includes("635 g"), "computed amount shown");
+  ok(html.includes("dose-quote"), "label quote block present");
+  ok(/Manufacturer/.test(html), "quote is labelled as the manufacturer's directions");
+  ok(html.indexOf("dose-amount") < html.indexOf("dose-quote"), "amount comes before the quote");
+});
+
+test("Today action card shows the computed dose inline", () => {
+  const st = freshState();
+  addTest(st, "2026-08-29T09:00:00", { freeChlorine: val(3), pH: val(6.8), alkalinity: val(40) });
+  vm.runInContext("state = " + JSON.stringify(st), sandbox);
+  const html = vm.runInContext('actionCard(new Date("2026-08-29T12:00:00"))', sandbox);
+  ok(html.includes("dose-block"), "dose block on the card");
+  ok(html.includes("635 g"), "reading-based amount visible without tapping VIEW ACTION");
+});
+
+test("Flat per-treatment products explain the repeat loop; label text escaped", () => {
+  const st = freshState();
+  st.chemicalInventory.find(c => c.id === "aqua_ph_plus").dosing.labelText = 'x<img src=x onerror=alert(1)>';
+  addTest(st, "2026-08-29T09:00:00", { pH: val(6.8) });
+  vm.runInContext("state = " + JSON.stringify(st), sandbox);
+  const html = vm.runInContext(
+    'doseLine("pH increaser", { param: "pH", current: {value:6.8}, target: state.targets.pH, direction: "raise" })', sandbox);
+  ok(html.includes("58.7 g"), "per-treatment dose shown");
+  ok(/per treatment/.test(html), "repeat-loop framing present");
+  ok(!html.includes("<img"), "label text escaped in the quote block");
+});
+
+
+test("Logged tests reopen from History with recommendations intact", () => {
+  const st = freshState();
+  addTest(st, "2026-08-29T09:00:00", { freeChlorine: val(3), alkalinity: val(40) });
+  vm.runInContext("state = " + JSON.stringify(st), sandbox);
+  const timeline = vm.runInContext("viewTimeline()", sandbox);
+  ok(timeline.includes("view-test"), "timeline offers the reopen action");
+  const html = vm.runInContext("resultHtml(state.events[0], true)", sandbox);
+  ok(/Test — /.test(html), "historical title with the test's date");
+  ok(/Correct alkalinity first/.test(html), "diagnosis recomputed from that test's readings");
+  ok(html.includes("635 g"), "dose guidance present on the reopened view");
+  ok(html.includes("BACK TO HISTORY"), "returns to History");
 });
 
 /* ---------------- summary ---------------- */

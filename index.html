@@ -156,6 +156,19 @@ svg { display: block; max-width: 100%; }
   border: 1px solid var(--border); vertical-align: -2px; margin-right: 5px; flex: none; }
 .reading-chip { display: inline-flex; align-items: center; margin: 2px 12px 2px 0; white-space: nowrap; }
 
+/* Structured dose guidance: the computed amount ("add now") is a
+   distinct block, and the manufacturer's verbatim directions sit in a
+   clearly separated quote below it. */
+.dose-block { background: var(--info-bg); border-radius: 12px; padding: 12px 14px; margin-top: 10px; }
+.dose-head { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+.dose-amount { font-size: 22px; font-weight: 700; margin: 2px 0; }
+.dose-product { font-size: 14px; font-weight: 600; color: var(--ink-2); }
+.dose-note { font-size: 13px; color: var(--ink-2); margin-top: 4px; }
+.dose-quote { border-left: 3px solid var(--accent); padding: 4px 0 4px 10px; margin-top: 10px;
+  font-size: 13px; font-style: italic; color: var(--ink-2); }
+.dose-quote-head { display: block; font-style: normal; font-size: 10.5px; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
+
 /* ============ TIMER ============ */
 .timer-wrap { text-align: center; padding: 30px 0; }
 .timer-num { font-size: 72px; font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -1712,7 +1725,14 @@ function saveTestFlow() {
   renderResult(ev);
 }
 
-function renderResult(ev) {
+function renderResult(ev, fromHistory) {
+  document.getElementById("app").innerHTML = '<div class="screen">' + resultHtml(ev, fromHistory) + "</div>" + viewTabBar();
+}
+
+// Full result view for a test — used right after saving AND when
+// reopening a logged test from History, so the recommendations and
+// dose guidance stay reachable until the corrective work is done.
+function resultHtml(ev, fromHistory) {
   const values = ev.data.values;
   const actions = diagnose(values, state.targets, ev.data.context);
   let rows = "";
@@ -1728,7 +1748,9 @@ function renderResult(ev) {
     rows += '<div class="result-row"><span>Est. combined chlorine</span><span><b>~' + cc + " ppm</b> " +
       statusBadge(cc >= 2 ? "amber" : "green", cc >= 2 ? "Elevated" : "OK") + "</span></div>";
   }
-  let html = '<h1 class="screen-title">Test complete</h1><div class="card">' + rows + "</div>";
+  let html = '<h1 class="screen-title">' + (fromHistory ? "Test — " + fmtDate(ev.timestamp, true) : "Test complete") + '</h1>' +
+    (fromHistory ? '<p class="subtitle">Reopened from History — recommendations below are computed from this test\'s readings.</p>' : "") +
+    '<div class="card">' + rows + "</div>";
   if (ev.data.context === "after_use" && values.freeChlorine && interpretFC(values.freeChlorine, state.targets).blocksUse) {
     html += '<div class="card"><div class="tl-detail">This reading was taken after use — a sanitizer dip after a busy session is expected demand. Restore chlorine, but one post-use low reading doesn\'t mean the normal sanitizer strategy is inadequate.</div></div>';
   }
@@ -1749,8 +1771,11 @@ function renderResult(ev) {
   } else {
     html += '<div class="banner banner-green"><div class="b-title">✓ All readings look good</div></div>';
   }
-  html += '<button class="btn" data-act="nav" data-arg="today">DONE</button>';
-  document.getElementById("app").innerHTML = '<div class="screen">' + html + "</div>" + viewTabBar();
+  html += fromHistory ?
+    '<button class="btn" data-act="nav" data-arg="history">BACK TO HISTORY</button>' +
+    '<button class="btn-quiet" data-act="nav" data-arg="today">Back to Today</button>' :
+    '<button class="btn" data-act="nav" data-arg="today">DONE</button>';
+  return html;
 }
 
 /* ============================================================
@@ -1783,27 +1808,6 @@ function actionDoseLine(action) {
   return doseLine(role, { param, current: r.value, target: t, direction });
 }
 
-// Dose cell for the chem-action screen. Handles every computeDose
-// outcome; all label-sourced fields are escaped (user-editable).
-function doseText(dose, ctx, vol) {
-  if (dose && dose.refuse) return "⚠ " + esc(dose.refuse);
-  if (dose && dose.noDoseNeeded) return "No dose needed by the conservative read — retest to confirm before adding anything.";
-  if (dose && dose.amount != null) {
-    let s = "<b>" + dose.amount + " " + esc(dose.unit) + "</b>";
-    if (dose.basis !== "flat" && dose.usedReading != null) {
-      s += " — per the label, for a " + (ctx && ctx.direction === "lower" ? "reduction" : "rise") +
-        " from ~" + dose.usedReading + (dose.aim != null ? " toward ~" + dose.aim : "") + ". Add, circulate, retest.";
-    }
-    if (dose.staged) s += " This is the label's maximum single treatment — repeat after retesting.";
-    if (dose.conservative) s += " Reading was a range, so this doses from the conservative end to avoid overshoot.";
-    if (dose.addsCya) s += " Adds ~" + dose.addsCya + " ppm CYA.";
-    if (dose.labelText) s += "<br><span class='muted'>Label: “" + esc(dose.labelText) + "”</span>";
-    else if (dose.note) s += "<br><span class='muted'>" + esc(dose.note) + "</span>";
-    return s;
-  }
-  return "Follow the product label for approximately <b>" + vol + "</b>.";
-}
-
 function viewChemAction(param) {
   const r = latestReading(state, param);
   const t = state.targets[param];
@@ -1825,10 +1829,20 @@ function viewChemAction(param) {
     '<div class="card">' +
     '<div class="result-row"><span>Current</span><b>' + (r ? formatValue(param, r.value) : "—") + "</b></div>" +
     (t && t.min != null ? '<div class="result-row"><span>Target</span><b>' + t.min + "–" + t.max + (param === "pH" ? "" : " ppm") + "</b></div>" : "") +
-    '<div class="result-row"><span>Product</span><b>' + (alkHigh ? "— (lowering procedure)" : product ? esc(product.name) : "Not configured") + "</b></div>" +
-    '<div class="result-row"><span>Dose</span><span>' + (alkHigh ?
-      "Alkalinity is high — <b>do not add alkalinity increaser</b>. Lower it gradually per your configured procedure: small adjustments, circulate, retest between each." :
-      doseText(dose, doseCtx, vol)) + "</span></div></div>";
+    '<div class="result-row"><span>Product</span><b>' + (alkHigh ? "— (lowering procedure)" : product ? esc(product.name) : "Not configured") + "</b></div></div>";
+  // Dose guidance renders full-width below the summary rows — the
+  // computed amount and the label quote need room, not a flex cell.
+  if (alkHigh) {
+    html += '<div class="card"><div class="tl-detail">Alkalinity is high — <b>do not add alkalinity increaser</b>. Lower it gradually per your configured procedure: small adjustments, circulate, retest between each.</div></div>';
+  } else if (dose && dose.refuse) {
+    html += '<div class="card"><div class="tl-detail">⚠ ' + esc(dose.refuse) + "</div></div>";
+  } else if (dose && dose.noDoseNeeded) {
+    html += '<div class="card"><div class="tl-detail">No dose needed by the conservative read — retest to confirm before adding anything.</div></div>';
+  } else if (dose && dose.amount != null) {
+    html += doseBlockHtml(product, dose, doseCtx);
+  } else {
+    html += '<div class="card"><div class="tl-detail">Follow the product label for approximately <b>' + vol + "</b>.</div></div>";
+  }
   if (param === "freeChlorine") {
     html += '<div class="card"><div class="tl-detail">Aqua Granular is stabilized chlorine — every dose also adds CYA. That\'s normal, and it\'s why CYA is tracked on every full test.</div></div>';
   }
@@ -2061,34 +2075,44 @@ function freshFillBalanceStep(step, now) {
   return html;
 }
 
-// One-line dose guidance for a product role. ctx (optional) enables the
-// exact delta/table math; without it only flat label scaling applies.
-// Every interpolated field is escaped — label text and units are
-// user-editable via Settings.
+// Structured dose guidance for a product role. The computed amount is
+// rendered as a distinct "add now" block; the manufacturer's verbatim
+// directions sit in a visually separated quote so the two are never
+// confused. ctx (optional) enables the exact delta/table math; without
+// it only flat label scaling applies. Every interpolated field is
+// escaped — label text and units are user-editable via Settings.
 function doseLine(role, ctx) {
   const product = findChemical(state, role);
   const dose = product ? computeDose(product, state.spaProfile, ctx) : null;
   const vol = state.spaProfile.volumeLitres.toLocaleString() + " L / " + state.spaProfile.volumeGallons.toLocaleString() + " gallons";
   if (dose && dose.refuse) return '<div class="tl-detail">⚠ ' + esc(dose.refuse) + "</div>";
   if (dose && dose.noDoseNeeded) return '<div class="tl-detail">No dose needed by the conservative read — retest to confirm before adding anything.</div>';
-  if (dose && dose.amount != null) {
-    let s = '<div class="tl-detail"><b>' + esc(product.name) + ": " + dose.amount + " " + esc(dose.unit) + "</b>";
-    if (dose.basis !== "flat" && dose.usedReading != null) {
-      s += " — per the label, for a " + (ctx && ctx.direction === "lower" ? "reduction" : "rise") +
-        " from ~" + dose.usedReading + (dose.aim != null ? " toward ~" + dose.aim : "") + ". Add, circulate, retest.";
-    }
-    if (dose.basis === "flat" && ctx) {
-      s += " — the label doses this product per treatment, not per point: add this amount, circulate, retest, and repeat until the reading is in range (further out = more rounds).";
-    }
-    if (dose.staged) s += " This is the label's maximum single treatment — repeat after retesting.";
-    if (dose.conservative) s += " Reading was a range, so this doses from the conservative end to avoid overshoot.";
-    if (dose.addsCya) s += " Adds ~" + dose.addsCya + " ppm CYA.";
-    if (dose.labelText) s += ' <span class="muted">Label: “' + esc(dose.labelText) + '”</span>';
-    else if (dose.note) s += ' <span class="muted">(' + esc(dose.note) + ")</span>";
-    return s + "</div>";
-  }
+  if (dose && dose.amount != null) return doseBlockHtml(product, dose, ctx);
   if (product) return '<div class="tl-detail">Use <b>' + esc(product.name) + "</b> — follow the product label for " + vol + ". Configure the label dose in Settings for an exact amount.</div>";
   return '<div class="tl-detail">No product configured. Use the product label for ' + vol + ".</div>";
+}
+
+function doseBlockHtml(product, dose, ctx) {
+  let s = '<div class="dose-block"><div class="dose-head">Add now — computed for this spa</div>' +
+    '<div class="dose-amount">' + dose.amount + " " + esc(dose.unit) +
+    '<span class="dose-product"> · ' + esc(product.name) + "</span></div>";
+  if (dose.basis !== "flat" && dose.usedReading != null) {
+    s += '<div class="dose-note">To ' + (ctx && ctx.direction === "lower" ? "lower" : "raise") +
+      " the reading from ~" + dose.usedReading + (dose.aim != null ? " toward ~" + dose.aim : "") +
+      ". Then circulate and retest.</div>";
+  }
+  if (dose.basis === "flat" && ctx) {
+    s += '<div class="dose-note">The label doses this product per treatment, not per point: add this amount, circulate, retest, and repeat until in range (further out = more rounds).</div>';
+  }
+  if (dose.staged) s += '<div class="dose-note">This is the label\'s maximum single treatment — repeat after retesting.</div>';
+  if (dose.conservative) s += '<div class="dose-note">Reading was a range, so this doses from the conservative end to avoid overshoot.</div>';
+  if (dose.addsCya) s += '<div class="dose-note">Adds ~' + dose.addsCya + " ppm CYA.</div>";
+  if (dose.labelText) {
+    s += '<div class="dose-quote"><span class="dose-quote-head">Manufacturer\'s directions (verbatim)</span>“' + esc(dose.labelText) + '”</div>';
+  } else if (dose.note) {
+    s += '<div class="dose-quote"><span class="dose-quote-head">Basis</span>' + esc(dose.note) + "</div>";
+  }
+  return s + "</div>";
 }
 
 function nextStartupState(s) {
@@ -2532,7 +2556,10 @@ function viewTimeline() {
       '<div class="tl-title">' + esc(eventTitle(ev)) + "</div>" +
       (ev.type === "water_test" && ev.data.values ? testValuesHtml(ev) :
         eventDetail(ev) ? '<div class="tl-detail">' + esc(eventDetail(ev)) + "</div>" : "") +
-      (ev.notes ? '<div class="tl-detail">📝 ' + esc(ev.notes) + "</div>" : "") + "</div></div>";
+      (ev.notes ? '<div class="tl-detail">📝 ' + esc(ev.notes) + "</div>" : "") +
+      (ev.type === "water_test" && ev.data.values ?
+        '<button class="btn-quiet" style="padding:4px 0" data-act="view-test" data-arg="' + ev.id + '">View result &amp; actions →</button>' : "") +
+      "</div></div>";
   });
   html += "</div>" +
     '<div class="card"><h3>Add a note</h3><div class="field"><input id="note-text" placeholder="e.g. water feels great today"></div>' +
@@ -2890,6 +2917,11 @@ function handleAction(act, el) {
     case "wc-refill": ui.waterChange = null; setStartupState("refill"); go("freshfill"); break;
     case "wc-cancel": ui.waterChange = null; render(); break;
     // History.
+    case "view-test": {
+      const ev2 = state.events.find(e => e.id === arg);
+      if (ev2 && ev2.type === "water_test") { ui.route = "result"; renderResult(ev2, true); }
+      break;
+    }
     case "hist-tab": ui.historyTab = arg; render(); break;
     case "trend-range": ui.trendRange = arg; render(); break;
     case "toggle-markers": state.settings.showEventMarkers = !state.settings.showEventMarkers; saveState(state); render(); break;
